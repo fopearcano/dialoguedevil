@@ -26,7 +26,8 @@ export function download(filename, text, type = 'text/plain') {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-export const slug = (s) => String(s || 'untitled').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'untitled';
+// File-name slug; accented letters lose their accents instead of vanishing.
+export const slug = (s) => String(s || 'untitled').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'untitled';
 
 export const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 

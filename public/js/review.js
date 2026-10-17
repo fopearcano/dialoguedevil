@@ -9,13 +9,14 @@ import { doubleCheckScene, lineHash } from './doublecheck.js';
 import { flattenLines } from './analysis.js';
 import { sceneForAI, projectMeta, fullChar, analyzerSummary } from './aicontext.js';
 import { characterById, sceneById } from './model.js';
+import { tr, getLang } from './i18n.js';
 
 export async function runAiReview(sceneId, { onText, signal } = {}) {
   const p = state.project;
   const scene = sceneById(p, sceneId);
-  if (!scene) throw new Error('Scene not found.');
+  if (!scene) throw new Error(tr('Scene not found.'));
   const speech = flattenLines(scene, { speechOnly: true }).map((e) => e.line).filter((l) => String(l.text || '').trim());
-  if (!speech.length) throw new Error('Write some lines first.');
+  if (!speech.length) throw new Error(tr('Write some lines first.'));
   // Fingerprints taken before the request: lines edited while the review
   // runs will read as changed, and their AI findings as stale.
   const hashes = Object.fromEntries(speech.map((l) => [l.id, lineHash(l)]));
@@ -36,6 +37,8 @@ export async function runAiReview(sceneId, { onText, signal } = {}) {
     body: {
       mode: 'review',
       model: state.settings.model || undefined,
+      lang: getLang(),
+      dialogueLang: p.lang,
       messages: [{ role: 'user', content: 'Double-check this scene: report what the analyzer missed and dispute its false alarms.' }],
       context,
     },
@@ -45,7 +48,7 @@ export async function runAiReview(sceneId, { onText, signal } = {}) {
       else if (type === 'error' || type === 'refusal') error = data.message;
     },
   });
-  if (!report) throw new Error(error || 'The reviewer returned no report.');
+  if (!report) throw new Error(error || tr('The reviewer returned no report.'));
   const known = new Set(Object.keys(hashes));
   const keep = (x) => !x.line_id || known.has(x.line_id);
   act((proj) => {

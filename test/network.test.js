@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { isPrivateAddress, isLoopback, onLocalSubnet, lanGuard, accessGate } from '../server/network.js';
 
 function fakeReq({ ip = '192.168.1.20', path = '/', query = {}, cookie = '', headers = {} } = {}) {
-  const h = { cookie, ...headers };
+  const h = { cookie, 'x-dd-lang': 'en', ...headers };
   return { socket: { remoteAddress: ip }, path, query, headers: h, get: (k) => h[k.toLowerCase()] };
 }
 

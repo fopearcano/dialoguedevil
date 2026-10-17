@@ -30,7 +30,7 @@ export function sceneForAI(s, p) {
 }
 
 export function projectMeta(p) {
-  return { title: p.title, logline: p.logline, medium: p.medium, genre: p.genre, vision: p.genreMode, coreValue: p.coreValue, incitingIncident: p.incitingIncident, mdq: p.mdq };
+  return { title: p.title, dialogueLanguage: p.lang, logline: p.logline, medium: p.medium, genre: p.genre, vision: p.genreMode, coreValue: p.coreValue, incitingIncident: p.incitingIncident, mdq: p.mdq };
 }
 
 // The double-check's current findings, compact, for the AI to confirm,

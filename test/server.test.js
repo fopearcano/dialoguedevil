@@ -195,3 +195,35 @@ test('AI review: report_issues ends the turn after one request and is validated'
   assert.equal(data.input.disputes[0].reason, 'Ironic on purpose.');
   assert.match(text, /event: done/);
 });
+
+test('Italian: sample, errors and the AI framework follow the language', async () => {
+  const json = { 'content-type': 'application/json' };
+  const it = { ...json, 'x-dd-lang': 'it' };
+  const sample = await (await fetch(`${base}/api/projects`, { method: 'POST', headers: json, body: JSON.stringify({ sample: true, lang: 'it' }) })).json();
+  assert.equal(sample.lang, 'it');
+  assert.equal(sample.title, "Quello che ha lasciato (copia dell'esempio)");
+  const blank = await (await fetch(`${base}/api/projects`, { method: 'POST', headers: it, body: '{}' })).json();
+  assert.equal(blank.lang, 'it');
+  assert.equal(blank.title, 'Storia senza titolo');
+  assert.equal((await (await fetch(`${base}/api/projects/nope_404`, { headers: it })).json()).error, 'Progetto non trovato');
+  assert.equal((await (await fetch(`${base}/api/projects/nope_404`)).json()).error, 'Project not found');
+
+  const bad = await fetch(`${base}/api/ai/chat`, { method: 'POST', headers: json, body: JSON.stringify({ lang: 'it', mode: 'coach', messages: [{ role: 'assistant', content: 'ciao' }] }) });
+  assert.match(await bad.text(), /La conversazione deve finire con un messaggio di chi scrive/);
+
+  const before = requests.length;
+  const res = await fetch(`${base}/api/ai/chat`, {
+    method: 'POST',
+    headers: it,
+    body: JSON.stringify({ mode: 'coach', dialogueLang: 'it', messages: [{ role: 'user', content: 'Aiutami con Nadia.' }], context: { meta: { characterName: 'Nadia' }, data: { character: { id: 'char_nadia' } } } }),
+  });
+  assert.match(await res.text(), /event: done/);
+  const { system } = requests[before].body;
+  assert.equal(system[0].cache_control.type, 'ephemeral');
+  assert.match(system[0].text, /McKee/);
+  assert.match(system[0].text, /Cap\. \d/);
+  assert.match(system[1].text, /# Language/);
+  assert.match(system[1].text, /in Italian/);
+  assert.match(system[1].text, /-ando\/-endo/);
+  assert.match(system[2].text, /char_nadia/);
+});

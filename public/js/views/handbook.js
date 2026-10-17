@@ -1,31 +1,34 @@
 import { html, useState, cx } from '../lib.js';
 import { navigate } from '../store.js';
-import { Cite } from '../components/ui.js';
+import { Cite, rich } from '../components/ui.js';
 import { Spheres, ConflictRings, LineDesignGlyph } from '../components/viz.js';
 import {
   BOOK, CHAPTERS, DEFINITION, THREE_TRACKS, DIALOGUE_MODES, MEDIA, THREE_FUNCTIONS, SPHERES, CONFLICT_LEVELS, CONFLICT_RULE, SIX_TASKS, LINE_DESIGNS, TECHNIQUES, DESIRE_COMPLEX, FIVE_STEPS, BEAT_DEFINITION, CONTEXT_CULTURE, CONFLICT_TYPES, FLAWS, WORD_CHOICE_OBSERVATIONS, PREFERENCES, CHARACTER_SPECIFIC, MODALITIES, KEY_QUESTIONS, MASTERING, AXIOMS, TACTICS, TURNING_POINT_TYPES, STORY_VALUES, MENTALITIES,
 } from '../mckee.js';
+import { tr, getLang } from '../i18n.js';
 
-const SECTIONS = [
-  { id: 'definition', title: 'What dialogue is', ch: 1, data: [DEFINITION, THREE_TRACKS, DIALOGUE_MODES] },
-  { id: 'functions', title: 'Three functions', ch: 2, data: [THREE_FUNCTIONS] },
-  { id: 'spheres', title: 'Said · unsaid · unsayable', ch: 3, data: [SPHERES] },
-  { id: 'conflict', title: 'The conflict complex', ch: 4, data: [CONFLICT_LEVELS, CONFLICT_RULE] },
-  { id: 'media', title: 'Page, stage, screen', ch: [1, 4], data: [MEDIA] },
-  { id: 'technique', title: 'Technique', ch: 5, data: [LINE_DESIGNS, TECHNIQUES] },
-  { id: 'tasks', title: 'Six dialogue tasks', ch: 'tasks', data: [SIX_TASKS] },
-  { id: 'flaws', title: 'Flaws & fixes', ch: [6, 7, 8, 9], data: [FLAWS, WORD_CHOICE_OBSERVATIONS, PREFERENCES] },
-  { id: 'voice', title: 'Character-specific dialogue', ch: 10, data: [CHARACTER_SPECIFIC, MODALITIES] },
-  { id: 'design', title: 'Story · scene · dialogue', ch: 12, data: [DESIRE_COMPLEX, FIVE_STEPS, BEAT_DEFINITION, CONTEXT_CULTURE, TURNING_POINT_TYPES, STORY_VALUES] },
-  { id: 'conflicts', title: 'Six kinds of conflict', ch: [13, 14, 15, 16, 17, 18], data: [CONFLICT_TYPES, MENTALITIES] },
-  { id: 'tactics', title: 'The vocabulary of action', ch: [2, 3, 12], data: [TACTICS] },
-  { id: 'craft', title: 'Mastering the craft', ch: 19, data: [MASTERING, KEY_QUESTIONS, AXIOMS] },
+// Built on each render: the knowledge base follows the interface language.
+const sections = () => [
+  { id: 'definition', title: tr('What dialogue is'), ch: 1, data: [DEFINITION, THREE_TRACKS, DIALOGUE_MODES] },
+  { id: 'functions', title: tr('Three functions'), ch: 2, data: [THREE_FUNCTIONS] },
+  { id: 'spheres', title: tr('Said · unsaid · unsayable'), ch: 3, data: [SPHERES] },
+  { id: 'conflict', title: tr('The conflict complex'), ch: 4, data: [CONFLICT_LEVELS, CONFLICT_RULE] },
+  { id: 'media', title: tr('Page, stage, screen'), ch: [1, 4], data: [MEDIA] },
+  { id: 'technique', title: tr('Technique'), ch: 5, data: [LINE_DESIGNS, TECHNIQUES] },
+  { id: 'tasks', title: tr('Six dialogue tasks'), ch: 'tasks', data: [SIX_TASKS] },
+  { id: 'flaws', title: tr('Flaws & fixes'), ch: [6, 7, 8, 9], data: [FLAWS, WORD_CHOICE_OBSERVATIONS, PREFERENCES] },
+  { id: 'voice', title: tr('Character-specific dialogue'), ch: 10, data: [CHARACTER_SPECIFIC, MODALITIES] },
+  { id: 'design', title: tr('Story · scene · dialogue'), ch: 12, data: [DESIRE_COMPLEX, FIVE_STEPS, BEAT_DEFINITION, CONTEXT_CULTURE, TURNING_POINT_TYPES, STORY_VALUES] },
+  { id: 'conflicts', title: tr('Six kinds of conflict'), ch: [13, 14, 15, 16, 17, 18], data: [CONFLICT_TYPES, MENTALITIES] },
+  { id: 'tactics', title: tr('The vocabulary of action'), ch: [2, 3, 12], data: [TACTICS] },
+  { id: 'craft', title: tr('Mastering the craft'), ch: 19, data: [MASTERING, KEY_QUESTIONS, AXIOMS] },
 ];
 
 export function HandbookView({ section }) {
   const [q, setQ] = useState('');
   const query = q.trim().toLowerCase();
-  const visible = SECTIONS.filter((s) => !query || `${s.title} ${JSON.stringify(s.data)}`.toLowerCase().includes(query));
+  const all = sections();
+  const visible = all.filter((s) => !query || `${s.title} ${JSON.stringify(s.data)}`.toLowerCase().includes(query));
   const go = (id) => {
     navigate(`handbook/${id}`);
     setTimeout(() => document.getElementById(`hb-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 30);
@@ -33,24 +36,25 @@ export function HandbookView({ section }) {
   return html`<div class="page handbook">
     <header class="hb-hero card">
       <div>
-        <p class="eyebrow">The Handbook</p>
-        <h1>Dialogue as verbal action</h1>
-        <p class="lead">The craft this app is built on, condensed and paraphrased from ${BOOK.author}, <em>${BOOK.title}</em> (${BOOK.year}), with chapter references so you can return to the source. The book itself is in this repository under <code>docs/</code>.</p>
+        <p class="eyebrow">${tr('The Handbook')}</p>
+        <h1>${tr('Dialogue as verbal action')}</h1>
+        <p class="lead">${rich('The craft this app is built on, condensed and paraphrased from {author}, {title} ({year}), with chapter references so you can return to the source. The book itself is in this repository under {dir}.', { author: BOOK.author, title: html`<em>${BOOK.title}</em>`, year: BOOK.year, dir: html`<code>docs/</code>` })}
+          ${getLang() === 'it' ? html` <span class="muted">${tr('The book is quoted from the original English edition; the short quotations here are free translations.')}</span>` : ''}</p>
       </div>
-      <input class="input search" type="search" placeholder="Search the handbook…" value=${q} onInput=${(e) => setQ(e.currentTarget.value)} aria-label="Search the handbook" />
+      <input class="input search" type="search" placeholder=${tr('Search the handbook…')} value=${q} onInput=${(e) => setQ(e.currentTarget.value)} aria-label=${tr('Search the handbook')} />
     </header>
     <div class="hb-layout">
-      <nav class="hb-toc" aria-label="Handbook sections">
-        ${SECTIONS.map((s) => html`<button type="button" class=${cx('toc-item', section === s.id && 'active', !visible.includes(s) && 'dim')} onClick=${() => go(s.id)}>${s.title}</button>`)}
+      <nav class="hb-toc" aria-label=${tr('Handbook sections')}>
+        ${all.map((s) => html`<button type="button" class=${cx('toc-item', section === s.id && 'active', !visible.some((v) => v.id === s.id) && 'dim')} onClick=${() => go(s.id)}>${s.title}</button>`)}
       </nav>
       <div class="hb-content">
         ${visible.map((s) => html`<section class="hb-section" id=${`hb-${s.id}`}>
           <h2>${s.title} <${Cite} ch=${s.ch} /></h2>
           ${RENDER[s.id](query)}
         </section>`)}
-        ${!visible.length ? html`<p class="muted">Nothing matches “${q}”.</p>` : ''}
+        ${!visible.length ? html`<p class="muted">${tr('Nothing matches “{q}”.', { q })}</p>` : ''}
         <footer class="hb-foot small muted">
-          Chapters: ${Object.entries(CHAPTERS).map(([k, v]) => html`<span class="chapter-ref">${/^\d+$/.test(k) ? `${k}. ` : ''}${v}</span>`)}
+          ${tr('Chapters:')} ${Object.entries(CHAPTERS).map(([k, v]) => html`<span class="chapter-ref">${/^\d+$/.test(k) ? `${k}. ` : ''}${v}</span>`)}
         </footer>
       </div>
     </div>
@@ -58,6 +62,13 @@ export function HandbookView({ section }) {
 }
 
 const match = (query, ...xs) => !query || xs.join(' ').toLowerCase().includes(query);
+
+const GROUP_TITLE = {
+  Credibility: () => tr('Credibility flaws'),
+  Language: () => tr('Language flaws'),
+  Content: () => tr('Content flaws'),
+  Design: () => tr('Design flaws'),
+};
 
 const RENDER = {
   definition: () => html`
@@ -84,8 +95,8 @@ const RENDER = {
     <div class="spheres-figure"><${Spheres} active="" /></div>
     <div>
       ${SPHERES.map((s) => html`<div class="sphere-field"><strong>${s.name}</strong> <span class="muted small">${s.layer}</span><p class="small">${s.desc}</p></div>`)}
-      <p class="small"><strong>Action vs. activity.</strong> Talk is an activity; beneath it the character takes an action. When a character speaks, she could be comforting, bribing, begging, defying… No line is finished until you can name that action. <${Cite} ch=${3} /></p>
-      <p class="small"><strong>Text and subtext.</strong> Fine dialogue is a transparency: the words conceal the inner life from other characters while letting the audience see through them. <${Cite} ch=${3} /></p>
+      <p class="small"><strong>${tr('Action vs. activity.')}</strong> ${tr('Talk is an activity; beneath it the character takes an action. When a character speaks, she could be comforting, bribing, begging, defying… No line is finished until you can name that action.')} <${Cite} ch=${3} /></p>
+      <p class="small"><strong>${tr('Text and subtext.')}</strong> ${tr('Fine dialogue is a transparency: the words conceal the inner life from other characters while letting the audience see through them.')} <${Cite} ch=${3} /></p>
     </div>
   </div>`,
 
@@ -94,7 +105,7 @@ const RENDER = {
     <div>
       ${CONFLICT_LEVELS.map((l) => html`<div class="sphere-field"><strong>${l.name}</strong> <span class="muted small">${l.talk}</span><p class="small">${l.desc}</p></div>`)}
       <p class="callout">${CONFLICT_RULE.text}</p>
-      <p class="small"><strong>Dialogue problems are story problems.</strong> The worse the storytelling, the worse the dialogue. <${Cite} ch=${4} /></p>
+      <p class="small"><strong>${tr('Dialogue problems are story problems.')}</strong> ${tr('The worse the storytelling, the worse the dialogue.')} <${Cite} ch=${4} /></p>
     </div>
   </div>`,
 
@@ -103,73 +114,73 @@ const RENDER = {
       const voice = { stage: 80, tv: 55, screen: 25, prose: 50 }[m.id];
       return html`<div class="mini-card">
         <strong>${m.name}</strong>
-        <div class="balance" aria-label=${m.balance}><span>voice</span><span class="balance-track"><span class="balance-dot" style=${`left:${100 - voice}%`}></span></span><span>image</span></div>
+        <div class="balance" aria-label=${m.balance}><span>${tr('voice')}</span><span class="balance-track"><span class="balance-dot" style=${`left:${100 - voice}%`}></span></span><span>${tr('image')}</span></div>
         <span class="small muted">${m.balance}</span>
         <ul class="small">${m.notes.map((n) => html`<li>${n}</li>`)}</ul>
       </div>`;
     })}
   </div>
-  <p class="small muted">Stage dialogue is the most embellished, screen dialogue the most concise, prose dialogue the most mutable. <${Cite} ch=${4} /></p>`,
+  <p class="small muted">${tr('Stage dialogue is the most embellished, screen dialogue the most concise, prose dialogue the most mutable.')} <${Cite} ch=${4} /></p>`,
 
   technique: (query) => html`
-    <h3>Line design: where the core word falls <${Cite} ch=${[5, 9]} /></h3>
+    <h3>${tr('Line design: where the core word falls')} <${Cite} ch=${[5, 9]} /></h3>
     <div class="grid-4">${LINE_DESIGNS.filter((d) => match(query, d.name, d.desc, d.example)).map((d) => html`<div class="mini-card">
       <strong>${d.name}</strong><${LineDesignGlyph} design=${d.id} /><p class="small">${d.desc}</p>${d.example ? html`<p class="small script">${d.example}</p>` : ''}
     </div>`)}</div>
-    <p class="small">The last word of a speech should be its core word, the cue for the reaction. Speeches ending in cumulative sentences tend to miscue. <${Cite} ch=${9} /></p>
+    <p class="small">${tr('The last word of a speech should be its core word, the cue for the reaction. Speeches ending in cumulative sentences tend to miscue.')} <${Cite} ch=${9} /></p>
     <div class="grid-3">${TECHNIQUES.filter((t) => match(query, t.name, t.desc)).map((t) => html`<div class="mini-card"><strong>${t.name}</strong> <${Cite} ch=${t.ch} /><p class="small">${t.desc}</p></div>`)}</div>`,
 
   tasks: () => html`<ol class="task-list">${SIX_TASKS.map((t) => html`<li><strong>${t.name}.</strong> ${t.desc}</li>`)}</ol>
-    <p class="small muted">The workshop scores every scene against these six. <${Cite} ch="tasks" /></p>`,
+    <p class="small muted">${tr('The workshop scores every scene against these six.')} <${Cite} ch="tasks" /></p>`,
 
   flaws: (query) => {
     const groups = ['Credibility', 'Language', 'Content', 'Design'];
     return html`
       ${groups.map((g) => {
         const rows = Object.values(FLAWS).filter((f) => f.group === g && match(query, f.name, f.why, f.fix));
-        return rows.length ? html`<h3>${g} flaws</h3><table class="flaw-table">
-          <thead><tr><th>Flaw</th><th>Why it fails</th><th>Fix</th></tr></thead>
+        return rows.length ? html`<h3>${GROUP_TITLE[g]()}</h3><table class="flaw-table">
+          <thead><tr><th>${tr('Flaw')}</th><th>${tr('Why it fails')}</th><th>${tr('Fix')}</th></tr></thead>
           <tbody>${rows.map((f) => html`<tr><td><strong>${f.name}</strong> <${Cite} ch=${f.ch} /></td><td class="small">${f.why}</td><td class="small">${f.fix}</td></tr>`)}</tbody>
         </table>` : '';
       })}
       <div class="two-col">
-        <div class="mini-card"><strong>Word choice tendencies</strong> <${Cite} ch=${7} /><ul class="small">${WORD_CHOICE_OBSERVATIONS.map((o) => html`<li>${o}</li>`)}</ul>
-          <p class="small">When conflict peaks, people get emotional, active, direct, monosyllabic, and say things they later regret.</p></div>
-        <div class="mini-card"><strong>Against arid language</strong> <${Cite} ch=${7} /><ul class="small">${PREFERENCES.map((o) => html`<li>${o}</li>`)}</ul>
-          <p class="small muted">Guidelines, not imperatives. A Boyd Crowder earns his polysyllables.</p></div>
+        <div class="mini-card"><strong>${tr('Word choice tendencies')}</strong> <${Cite} ch=${7} /><ul class="small">${WORD_CHOICE_OBSERVATIONS.map((o) => html`<li>${o}</li>`)}</ul>
+          <p class="small">${tr('When conflict peaks, people get emotional, active, direct, monosyllabic, and say things they later regret.')}</p></div>
+        <div class="mini-card"><strong>${tr('Against arid language')}</strong> <${Cite} ch=${7} /><ul class="small">${PREFERENCES.map((o) => html`<li>${o}</li>`)}</ul>
+          <p class="small muted">${tr('Guidelines, not imperatives. A Boyd Crowder earns his polysyllables.')}</p></div>
       </div>`;
   },
 
   voice: () => html`
     <p class="callout">${CHARACTER_SPECIFIC.principle}</p>
     <div class="two-col">
-      <div class="mini-card"><strong>Knowledge: nouns & verbs</strong><p class="small">${CHARACTER_SPECIFIC.knowledge}</p></div>
-      <div class="mini-card"><strong>Personality: modifiers</strong>
+      <div class="mini-card"><strong>${tr('Knowledge: nouns & verbs')}</strong><p class="small">${CHARACTER_SPECIFIC.knowledge}</p></div>
+      <div class="mini-card"><strong>${tr('Personality: modifiers')}</strong>
         <ul class="small">${CHARACTER_SPECIFIC.personality.map((x) => html`<li><strong>${x.name}:</strong> ${x.ex}</li>`)}</ul></div>
     </div>
     <div class="grid-4">${MODALITIES.map((m) => html`<div class="mini-card"><strong>${m.name}</strong><span class="mono small">${m.words}</span><p class="small">${m.desc}</p></div>`)}</div>
     <p class="small">${CHARACTER_SPECIFIC.culture} <${Cite} ch=${[10, 11]} /></p>
     <p class="small">${CHARACTER_SPECIFIC.limitation}</p>
-    <p class="small muted">Voice is not a choice; it's a result. Quirkiness is not originality. <${Cite} ch=${10} /></p>`,
+    <p class="small muted">${tr('Voice is not a choice; it\'s a result. Quirkiness is not originality.')} <${Cite} ch=${10} /></p>`,
 
   design: () => html`
-    <h3>The complex of desire <${Cite} ch=${12} /></h3>
+    <h3>${tr('The complex of desire')} <${Cite} ch=${12} /></h3>
     <div class="grid-5">${DESIRE_COMPLEX.map((d, i) => html`<div class="mini-card"><div class="big-num">${i + 1}</div><strong>${d.name}</strong><p class="small">${d.desc}</p></div>`)}</div>
-    <h3>Five steps of behavior <${Cite} ch=${12} /></h3>
+    <h3>${tr('Five steps of behavior')} <${Cite} ch=${12} /></h3>
     <ol class="flow">${FIVE_STEPS.map((s) => html`<li><strong>${s.name}</strong><span class="small">${s.q}</span></li>`)}</ol>
-    <p class="small">It is impossible to know what a character will say until you answer: What does he want? What stops him? What will he choose to do? <${Cite} ch=${12} /></p>
+    <p class="small">${tr('It is impossible to know what a character will say until you answer: What does he want? What stops him? What will he choose to do?')} <${Cite} ch=${12} /></p>
     <div class="two-col">
-      <div class="mini-card"><strong>The beat</strong> <${Cite} ch=${[9, 12]} /><p class="small">${BEAT_DEFINITION.text}</p>
-        <p class="small script">BEAT 3 · ACTION: Teo claiming the inheritance / REACTION: Nadia exposing his ignorance</p></div>
-      <div class="mini-card"><strong>Turning points</strong> <${Cite} ch=${12} />
+      <div class="mini-card"><strong>${tr('The beat')}</strong> <${Cite} ch=${[9, 12]} /><p class="small">${BEAT_DEFINITION.text}</p>
+        <p class="small script">${tr('BEAT 3 · ACTION: Teo claiming the inheritance / REACTION: Nadia exposing his ignorance')}</p></div>
+      <div class="mini-card"><strong>${tr('Turning points')}</strong> <${Cite} ch=${12} />
         ${TURNING_POINT_TYPES.map((t) => html`<p class="small"><strong>${t.name}:</strong> ${t.desc}</p>`)}
-        <p class="small">A scene's value can reverse, intensify or wane. If it doesn't change, the scene is a nonevent.</p></div>
+        <p class="small">${tr('A scene\'s value can reverse, intensify or wane. If it doesn\'t change, the scene is a nonevent.')}</p></div>
     </div>
     <div class="two-col">
-      <div class="mini-card"><strong>High-context cultures</strong><p class="small">${CONTEXT_CULTURE.high}</p></div>
-      <div class="mini-card"><strong>Low-context cultures</strong><p class="small">${CONTEXT_CULTURE.low}</p></div>
+      <div class="mini-card"><strong>${tr('High-context cultures')}</strong><p class="small">${CONTEXT_CULTURE.high}</p></div>
+      <div class="mini-card"><strong>${tr('Low-context cultures')}</strong><p class="small">${CONTEXT_CULTURE.low}</p></div>
     </div>
-    <p class="small muted">Value pairs to start from: ${STORY_VALUES.map(([a, b]) => `${a}/${b}`).join(' · ')}</p>`,
+    <p class="small muted">${tr('Value pairs to start from:')} ${STORY_VALUES.map(([a, b]) => `${a}/${b}`).join(' · ')}</p>`,
 
   conflicts: () => html`<div class="grid-3">
     ${CONFLICT_TYPES.map((t) => html`<div class="mini-card">
@@ -179,10 +190,10 @@ const RENDER = {
       <ul class="small">${t.tips.map((x) => html`<li>${x}</li>`)}</ul>
     </div>`)}
   </div>
-  <div class="two-col">${MENTALITIES.map((m) => html`<div class="mini-card"><strong>${m.name} mentality</strong> <${Cite} ch=${m.ch} /><p class="small">${m.desc}</p></div>`)}</div>`,
+  <div class="two-col">${MENTALITIES.map((m) => html`<div class="mini-card"><strong>${tr('{name} mentality', { name: m.name })}</strong> <${Cite} ch=${m.ch} /><p class="small">${m.desc}</p></div>`)}</div>`,
 
   tactics: (query) => html`
-    <p class="small">Name the action beneath every line with an active gerund. It is the best way to stop yourself writing on-the-nose. <${Cite} ch=${12} /></p>
+    <p class="small">${tr('Name the action beneath every line with an active gerund. It is the best way to stop yourself writing on-the-nose.')} <${Cite} ch=${12} /></p>
     <div class="tactic-groups">${Object.entries(TACTICS).map(([g, list]) => {
       const items = list.filter((t) => match(query, g, t));
       return items.length ? html`<div class="mini-card"><strong>${g}</strong><div class="chip-row">${items.map((t) => html`<span class="chip">${t}</span>`)}</div></div>` : '';
@@ -190,8 +201,8 @@ const RENDER = {
 
   craft: (query) => html`
     <div class="grid-5">${MASTERING.map((m) => html`<div class="mini-card"><strong>${m.name}</strong><p class="small">${m.desc}</p></div>`)}</div>
-    <h3>Key questions <${Cite} ch=${19} /></h3>
+    <h3>${tr('Key questions')} <${Cite} ch=${19} /></h3>
     <table class="flaw-table"><tbody>${KEY_QUESTIONS.filter((k) => match(query, k.name, k.q)).map((k) => html`<tr><td><strong>${k.name}</strong></td><td class="small">${k.q}</td></tr>`)}</tbody></table>
-    <h3>Axioms</h3>
+    <h3>${tr('Axioms')}</h3>
     <div class="axioms">${AXIOMS.map((a) => html`<blockquote class="axiom">“${a.text}” <${Cite} ch=${a.ch} /></blockquote>`)}</div>`,
 };

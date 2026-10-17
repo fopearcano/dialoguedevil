@@ -6,9 +6,10 @@ import Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod';
 import { TOOLS, TOOL_ACK, MODES, buildSystem } from './prompts.js';
 import { REVIEWABLE_FLAWS } from '../public/js/mckee.js';
+import { trl, normLang, N_ } from '../public/js/i18n.js';
 
 export const MODELS = [
-  { id: 'claude-opus-5-5', label: 'Claude Opus 5.5 (default)' },
+  { id: 'claude-opus-5-5', label: 'Claude Opus 5.5' },
   { id: 'claude-sonnet-5-5', label: 'Claude Sonnet 5.5' },
   { id: 'claude-haiku-5-5', label: 'Claude Haiku 5.5' },
   { id: 'claude-fable-5-1', label: 'Claude Fable 5.1' },
@@ -69,21 +70,26 @@ function sanitizeMessages(raw) {
     .map((m) => ({ role: m.role, content: m.content.slice(0, 20000) }))
     .slice(-40);
   while (msgs.length && msgs[0].role !== 'user') msgs.shift();
-  if (!msgs.length || msgs[msgs.length - 1].role !== 'user') throw new Error('The conversation must end with a message from the writer.');
+  if (!msgs.length || msgs[msgs.length - 1].role !== 'user') throw new Error(N_('The conversation must end with a message from the writer.'));
   return msgs;
 }
 
 // Runs the conversation and reports progress through send(event, data).
+// body.lang: the interface language (replies); body.dialogueLang: the
+// language the project's dialogue is written in.
 export async function runChat({ body, apiKey, send, signal }) {
+  const lang = normLang(body.lang);
+  const dialogueLang = normLang(body.dialogueLang || lang);
+  const L = (key, vars) => trl(lang, key, vars);
   const mode = MODES[body.mode] ? body.mode : 'coach';
   const model = MODELS.some((m) => m.id === body.model) ? body.model : DEFAULT_MODEL;
   const messages = sanitizeMessages(body.messages);
   const context = { meta: body.context?.meta || {}, data: body.context?.data || {} };
 
-  if (process.env.DD_AI_MOCK === '1') return mockChat({ mode, context, send, signal });
+  if (process.env.DD_AI_MOCK === '1') return mockChat({ mode, context, send, signal, lang, dialogueLang });
 
   const client = apiKey ? new Anthropic({ apiKey }) : new Anthropic();
-  const system = buildSystem(mode, context);
+  const system = buildSystem(mode, context, { lang, dialogueLang });
   const tools = TOOLS.map((t) => ({ ...t, eager_input_streaming: true }));
   const history = [...messages];
   let jsonRetries = 0;
@@ -113,12 +119,12 @@ export async function runChat({ body, apiKey, send, signal }) {
       // errors, missing credentials, aborts) propagates to the caller.
       const badToolJson = err instanceof Anthropic.AnthropicError && !(err instanceof Anthropic.APIError) && /tool parameter JSON/i.test(err.message);
       if (!badToolJson || signal?.aborted || jsonRetries++ >= 2) throw err;
-      send('notice', { message: 'Retrying a malformed tool call…' });
+      send('notice', { message: L('Retrying a malformed tool call…') });
       continue;
     }
 
     if (message.stop_reason === 'refusal') {
-      send('refusal', { message: 'The model declined this request.', category: message.stop_details?.category || null });
+      send('refusal', { message: L('The model declined this request.'), category: message.stop_details?.category || null });
       break;
     }
     if (message.stop_reason === 'pause_turn') {
@@ -127,11 +133,11 @@ export async function runChat({ body, apiKey, send, signal }) {
     }
     const toolUses = message.content.filter((b) => b.type === 'tool_use');
     if (!toolUses.length) {
-      if (message.stop_reason === 'max_tokens') send('notice', { message: 'The reply hit its length limit.' });
+      if (message.stop_reason === 'max_tokens') send('notice', { message: L('The reply hit its length limit.') });
       break;
     }
     if (message.stop_reason === 'max_tokens') {
-      send('error', { message: 'A proposal was cut off at the length limit. Try asking for less at once.' });
+      send('error', { message: L('A proposal was cut off at the length limit. Try asking for less at once.') });
       break;
     }
 
@@ -156,16 +162,17 @@ export async function runChat({ body, apiKey, send, signal }) {
   }
 }
 
-export function describeError(err) {
-  if (err instanceof Anthropic.AuthenticationError) return { status: 401, message: 'The API key was rejected. Check it in Settings, or set ANTHROPIC_API_KEY for the server.' };
-  if (err instanceof Anthropic.PermissionDeniedError) return { status: 403, message: 'This API key does not have access to the selected model.' };
-  if (err instanceof Anthropic.NotFoundError) return { status: 404, message: 'Model not found. Pick another model in Settings.' };
-  if (err instanceof Anthropic.RateLimitError) return { status: 429, message: 'Rate limited. Wait a moment and try again.' };
-  if (err instanceof Anthropic.BadRequestError) return { status: 400, message: `Request rejected: ${err.message}` };
-  if (err instanceof Anthropic.APIConnectionError) return { status: 502, message: 'Could not reach the Claude API. Check the network.' };
-  if (err instanceof Anthropic.APIError) return { status: err.status || 500, message: `Claude API error: ${err.message}` };
-  if (/credentials|apiKey|authToken|API key/i.test(String(err?.message))) return { status: 401, message: 'No API key configured. Add one in Settings, or start the server with ANTHROPIC_API_KEY set.' };
-  return { status: 500, message: String(err?.message || err) };
+export function describeError(err, lang = 'en') {
+  const L = (key, vars) => trl(lang, key, vars);
+  if (err instanceof Anthropic.AuthenticationError) return { status: 401, message: L('The API key was rejected. Check it in Settings, or set ANTHROPIC_API_KEY for the server.') };
+  if (err instanceof Anthropic.PermissionDeniedError) return { status: 403, message: L('This API key does not have access to the selected model.') };
+  if (err instanceof Anthropic.NotFoundError) return { status: 404, message: L('Model not found. Pick another model in Settings.') };
+  if (err instanceof Anthropic.RateLimitError) return { status: 429, message: L('Rate limited. Wait a moment and try again.') };
+  if (err instanceof Anthropic.BadRequestError) return { status: 400, message: L('Request rejected: {reason}', { reason: err.message }) };
+  if (err instanceof Anthropic.APIConnectionError) return { status: 502, message: L('Could not reach the Claude API. Check the network.') };
+  if (err instanceof Anthropic.APIError) return { status: err.status || 500, message: L('Claude API error: {reason}', { reason: err.message }) };
+  if (/credentials|apiKey|authToken|API key/i.test(String(err?.message))) return { status: 401, message: L('No API key configured. Add one in Settings, or start the server with ANTHROPIC_API_KEY set.') };
+  return { status: 500, message: L(String(err?.message || err)) };
 }
 
 // ---------------------------------------------------------------------------
@@ -183,51 +190,98 @@ async function streamText(text, send, signal) {
   }
 }
 
-async function mockChat({ mode, context, send, signal }) {
+// Canned replies per dialogue language (and interface language for text).
+const MOCK = {
+  en: {
+    speech: { text: 'Balance staff. Broken since March.', paralanguage: 'not looking up from the loupe', subtext: 'I was here. You weren\'t.', tactic: 'exposing his ignorance' },
+    reviewIntro: '(Mock mode.) Reading every line against the analyzer…',
+    reviewSummary: '(Mock) The scene turns; one line leans on a stock phrase.',
+    reviewNote: '(Mock) A familiar turn of phrase.',
+    reviewFix: 'Find the version only this character would say.',
+    reviewDispute: '(Mock) Deliberate in context.',
+    coach: (name) => `(Mock mode.) Let's go beneath ${name || 'the mask'}. Ch. 12 separates the object of desire from the super-intention: what they want versus the hunger that drives it. If they got what they wanted tomorrow, would the hunger stop?`,
+    coachUpdates: [
+      { path: 'desire.superIntention', value: 'To be chosen, just once, over someone more promising.', rationale: 'Restates the want as a need (Ch. 12).' },
+      { path: 'voice.sliders.pace', value: '80', rationale: 'Short, staccato lines suit someone who controls rooms (Ch. 13).' },
+    ],
+    alts: [
+      { text: 'You still take two sugars?', subtext: 'I remember you.', tactic: 'testing', note: 'A question instead of a claim.' },
+      { text: 'Black. Like the shop\'s books.', subtext: 'We\'re broke too.', tactic: 'deflecting', note: 'A joke that hides a fact.' },
+    ],
+    altsOutro: 'Two options in mock mode. A live model would give five.',
+    beat: { action: 'testing her', reaction: 'refusing the bait', rationale: 'Mock beat.', lines: [
+      ['You kept his glasses.', 'You kept everything.'],
+      ['Prescription. Somebody might need them.', 'I can\'t throw him away.'],
+    ] },
+    doctor: '(Mock mode.) Root cause first: dialogue problems are story problems (Ch. 9). Check that each beat changes its tactic and that the value turns.',
+  },
+  it: {
+    speech: { text: 'L\'asse del bilanciere. Rotto da marzo.', paralanguage: 'senza alzare gli occhi dalla lente', subtext: 'Io c\'ero. Tu no.', tactic: 'smascherando la sua ignoranza' },
+    reviewIntro: '(Modalità simulata.) Leggo ogni battuta accanto all\'analizzatore…',
+    reviewSummary: '(Simulazione) La scena gira; una battuta si appoggia a una frase fatta.',
+    reviewNote: '(Simulazione) Un modo di dire già sentito.',
+    reviewFix: 'Trova la versione che direbbe solo questo personaggio.',
+    reviewDispute: '(Simulazione) Voluto, nel contesto.',
+    coach: (name) => `(Modalità simulata.) Andiamo sotto la maschera di ${name || 'questo personaggio'}. Il Cap. 12 distingue l'oggetto del desiderio dal super-obiettivo: ciò che vuole e la fame che lo spinge. Se domani ottenesse ciò che vuole, la fame finirebbe?`,
+    coachUpdates: [
+      { path: 'desire.superIntention', value: 'Essere scelta, almeno una volta, al posto di qualcuno più promettente.', rationale: 'Riformula il volere come bisogno (Cap. 12).' },
+      { path: 'voice.sliders.pace', value: '80', rationale: 'Battute brevi e incalzanti per chi comanda nelle stanze (Cap. 13).' },
+    ],
+    alts: [
+      { text: 'Ancora due zuccheri?', subtext: 'Mi ricordo di te.', tactic: 'mettendolo alla prova', note: 'Una domanda invece di un\'affermazione.' },
+      { text: 'Nero. Come i conti della bottega.', subtext: 'Anche noi siamo senza soldi.', tactic: 'deviando', note: 'Una battuta che nasconde un fatto.' },
+    ],
+    altsOutro: 'Due opzioni in modalità simulata. Un modello vero ne darebbe cinque.',
+    beat: { action: 'mettendola alla prova', reaction: 'rifiutando l\'esca', rationale: 'Beat simulato.', lines: [
+      ['Hai tenuto i suoi occhiali.', 'Hai tenuto tutto.'],
+      ['Da vista. A qualcuno potrebbero servire.', 'Non riesco a buttarlo via.'],
+    ] },
+    doctor: '(Modalità simulata.) Prima la causa profonda: i problemi di dialogo sono problemi di storia (Cap. 9). Controlla che ogni beat cambi tattica e che il valore giri.',
+  },
+};
+
+async function mockChat({ mode, context, send, signal, lang = 'en', dialogueLang = lang }) {
+  const T = MOCK[lang] || MOCK.en; // replies in the interface language
+  const D = MOCK[dialogueLang] || MOCK.en; // dialogue in the project's language
   const meta = context.meta || {};
   const scene = context.data?.scene;
   const chars = context.data?.characters || [];
   if (mode === 'rehearse') {
-    send('proposal', { tool: 'speak_in_character', id: 'mock_speech', input: { text: 'Balance staff. Broken since March.', paralanguage: 'not looking up from the loupe', subtext: 'I was here. You weren\'t.', tactic: 'exposing his ignorance' } });
+    send('proposal', { tool: 'speak_in_character', id: 'mock_speech', input: D.speech });
     return;
   }
   if (mode === 'review') {
     const firstLine = (scene?.beats || []).flatMap((b) => b.lines || []).find((l) => l.kind !== 'action' && l.text);
     const flagged = Object.entries(context.data?.analyzer?.lineFindings || {})[0];
-    await streamText('(Mock mode.) Reading every line against the analyzer…', send, signal);
+    await streamText(T.reviewIntro, send, signal);
     send('proposal', { tool: 'report_issues', id: 'mock_review', input: {
-      summary: '(Mock) The scene turns; one line leans on a stock phrase.',
-      issues: firstLine ? [{ line_id: firstLine.id, flaw: 'cliche', severity: 'info', evidence: firstLine.text.slice(0, 30), note: '(Mock) A familiar turn of phrase.', fix: 'Find the version only this character would say.' }] : [],
-      disputes: flagged ? [{ line_id: flagged[0], flaw: String(flagged[1][0]).split(' ')[0], reason: '(Mock) Deliberate in context.' }] : [],
+      summary: T.reviewSummary,
+      issues: firstLine ? [{ line_id: firstLine.id, flaw: 'cliche', severity: 'info', evidence: firstLine.text.slice(0, 30), note: T.reviewNote, fix: T.reviewFix }] : [],
+      disputes: flagged ? [{ line_id: flagged[0], flaw: String(flagged[1][0]).split(' ')[0], reason: T.reviewDispute }] : [],
     } });
     return;
   }
   if (mode === 'coach') {
-    await streamText(`(Mock mode.) Let's go beneath ${meta.characterName || 'the mask'}. Ch. 12 separates the object of desire from the super-intention: what they want versus the hunger that drives it. If they got what they wanted tomorrow, would the hunger stop?`, send, signal);
-    send('proposal', { tool: 'propose_character_updates', id: 'mock_upd', input: { character_id: meta.characterId || chars[0]?.id || '', updates: [
-      { path: 'desire.superIntention', value: 'To be chosen, just once, over someone more promising.', rationale: 'Restates the want as a need (Ch. 12).' },
-      { path: 'voice.sliders.pace', value: '80', rationale: 'Short, staccato lines suit someone who controls rooms (Ch. 13).' },
-    ] } });
+    await streamText(T.coach(meta.characterName), send, signal);
+    send('proposal', { tool: 'propose_character_updates', id: 'mock_upd', input: { character_id: meta.characterId || chars[0]?.id || '', updates: T.coachUpdates } });
     return;
   }
   if (mode === 'alternatives') {
     const speaker = chars[0]?.id || '';
-    send('proposal', { tool: 'propose_lines', id: 'mock_alt', input: { scene_id: scene?.id || '', target_line_id: meta.targetLineId || null, options: [
-      { speaker_id: speaker, text: 'You still take two sugars?', subtext: 'I remember you.', tactic: 'testing', note: 'A question instead of a claim.' },
-      { speaker_id: speaker, text: 'Black. Like the shop\'s books.', subtext: 'We\'re broke too.', tactic: 'deflecting', note: 'A joke that hides a fact.' },
-    ] } });
-    await streamText('Two options in mock mode. A live model would give five.', send, signal);
+    send('proposal', { tool: 'propose_lines', id: 'mock_alt', input: { scene_id: scene?.id || '', target_line_id: meta.targetLineId || null, options: D.alts.map((o) => ({ speaker_id: speaker, ...o })) } });
+    await streamText(T.altsOutro, send, signal);
     return;
   }
   if (mode === 'beats') {
     const p = scene?.participants || [];
-    send('proposal', { tool: 'propose_beats', id: 'mock_beats', input: { scene_id: scene?.id || '', rationale: 'Mock beat.', beats: [
-      { actor_id: p[0]?.characterId || '', action: 'testing her', reactor_id: p[1]?.characterId || '', reaction: 'refusing the bait', charge: -3, intensity: 5, lines: [
-        { speaker_id: p[0]?.characterId || '', text: 'You kept his glasses.', subtext: 'You kept everything.', tactic: 'testing her' },
-        { speaker_id: p[1]?.characterId || '', text: 'Prescription. Somebody might need them.', subtext: 'I can\'t throw him away.', tactic: 'refusing the bait' },
+    const [a, b] = [p[0]?.characterId || '', p[1]?.characterId || ''];
+    send('proposal', { tool: 'propose_beats', id: 'mock_beats', input: { scene_id: scene?.id || '', rationale: T.beat.rationale, beats: [
+      { actor_id: a, action: D.beat.action, reactor_id: b, reaction: D.beat.reaction, charge: -3, intensity: 5, lines: [
+        { speaker_id: a, text: D.beat.lines[0][0], subtext: D.beat.lines[0][1], tactic: D.beat.action },
+        { speaker_id: b, text: D.beat.lines[1][0], subtext: D.beat.lines[1][1], tactic: D.beat.reaction },
       ] },
     ] } });
     return;
   }
-  await streamText('(Mock mode.) Root cause first: dialogue problems are story problems (Ch. 9). Check that each beat changes its tactic and that the value turns.', send, signal);
+  await streamText(T.doctor, send, signal);
 }

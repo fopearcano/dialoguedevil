@@ -3,13 +3,15 @@
 
 import { useState, useEffect, debounce } from './lib.js';
 import { normalizeProject } from './model.js';
+import { setLang, guessLang, tr } from './i18n.js';
+import { useKb } from './mckee.js';
 import * as api from './api.js';
 
 const SETTINGS_KEY = 'dd:settings';
 const listeners = new Set();
 
 function loadSettings() {
-  const defaults = { theme: 'system', apiKey: '', model: '', showSubtext: true, showPossible: true, showDismissed: false, readDirections: false, lastProjectId: '', drawerOpen: window.innerWidth >= 1240 };
+  const defaults = { lang: guessLang(navigator.languages || [navigator.language]), theme: 'system', apiKey: '', model: '', showSubtext: true, showPossible: true, showDismissed: false, readDirections: false, lastProjectId: '', drawerOpen: window.innerWidth >= 1240 };
   try {
     return { ...defaults, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}') };
   } catch {
@@ -61,7 +63,16 @@ export function setSetting(key, value) {
   state.settings = { ...state.settings, [key]: value };
   try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(state.settings)); } catch { /* private mode */ }
   if (key === 'theme') applyTheme();
+  if (key === 'lang') applyLang();
   emit();
+}
+
+// Interface language: strings (tr), the McKee knowledge base and <html lang>.
+export function applyLang() {
+  const l = state.settings.lang;
+  setLang(l);
+  useKb(l);
+  document.documentElement.lang = l;
 }
 
 export function applyTheme() {
@@ -156,7 +167,7 @@ async function save({ keepalive = false } = {}) {
           state.saving = 'conflict';
         } else {
           state.saving = 'error';
-          state.error = `Not saved to the server (${err.message}). Your changes are kept in this browser and will be retried.`;
+          state.error = tr('Not saved to the server ({reason}). Your changes are kept in this browser and will be retried.', { reason: err.message });
         }
       }
     }
@@ -248,7 +259,7 @@ export async function openProject(id) {
     state.project = local;
     dirty = true;
     state.saving = 'pending';
-    toast('Restored unsaved changes from this browser');
+    toast(tr('Restored unsaved changes from this browser'));
     persist();
   } else if (local) {
     // Unsaved edits here, and the project moved on elsewhere.
@@ -277,21 +288,21 @@ export async function resolveConflict(choice) {
     state.saving = 'saved';
     writeBackup(false);
     emit();
-    toast('Loaded the latest version');
+    toast(tr('Loaded the latest version'));
   } else if (choice === 'mine') {
     state.project.revision = c.remote.revision;
     state.conflict = null;
     dirty = true;
     emit();
     await flushNow();
-    toast('Your version was saved over the other one');
+    toast(tr('Your version was saved over the other one'));
   } else if (choice === 'copy') {
     const mine = JSON.parse(JSON.stringify(state.project));
     try { localStorage.setItem(backupKey(c.remote.id), JSON.stringify({ dirty: false, at: Date.now(), project: c.remote })); } catch { /* ignore */ }
-    state.conflict = null;
     dirty = false;
-    await createAndOpen({ project: { ...mine, title: `${mine.title} (my copy)` } });
-    toast('Your version was saved as a copy');
+    // The banner stays up until the copy exists (opening it clears the conflict).
+    await createAndOpen({ project: { ...mine, title: tr('{title} (my copy)', { title: mine.title }) } });
+    toast(tr('Your version was saved as a copy'));
   }
 }
 
@@ -312,10 +323,10 @@ async function poll() {
     clearUndo();
     writeBackup(false);
     emit();
-    toast('Updated with changes from another device');
+    toast(tr('Updated with changes from another device'));
   } catch (err) {
     if (err.status === 404 && state.project === p) {
-      toast('This project was deleted on another device', 'error');
+      toast(tr('This project was deleted on another device'), 'error');
       const list = await refreshProjects();
       if (list.length) await openProject(list[0].id);
       else await createAndOpen({ sample: true });
@@ -323,8 +334,10 @@ async function poll() {
   }
 }
 
+// New projects (and sample copies) are written in the interface language
+// unless the body says otherwise.
 export async function createAndOpen(body) {
-  const p = await api.createProject(body);
+  const p = await api.createProject({ lang: state.settings.lang, ...body });
   await refreshProjects();
   await openProject(p.id);
   navigate('story');
@@ -342,6 +355,7 @@ export async function removeProject(id) {
 
 export async function boot() {
   applyTheme();
+  applyLang();
   try {
     state.ai = await api.aiStatus();
   } catch {
@@ -378,3 +392,6 @@ function flushOnHide() {
 }
 document.addEventListener('visibilitychange', () => { if (document.hidden) flushOnHide(); });
 window.addEventListener('pagehide', flushOnHide);
+
+// Before the first render, so nothing flashes in the wrong language.
+applyLang();

@@ -4,8 +4,11 @@
 // exposition used as ammunition and a backstory revelation as turning point.
 
 import { normalizeProject } from './model.js';
+import { sampleProjectIt } from './sample.it.js';
 
-export function sampleProject() {
+// The sample in the given language; same ids in every language.
+export function sampleProject(lang = 'en') {
+  if (lang === 'it') return normalizeProject(sampleProjectIt());
   const N = 'char_nadia';
   const T = 'char_teo';
   const VT = 'val_truth';
@@ -16,6 +19,7 @@ export function sampleProject() {
 
   return normalizeProject({
     id: 'proj_sample',
+    lang: 'en',
     title: 'What He Left',
     logline: 'Two estranged siblings divide their late father\'s things in one night, and his broken wristwatch becomes the battlefield for which of them he loved.',
     medium: 'screen',

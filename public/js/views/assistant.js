@@ -1,19 +1,20 @@
 import { html, useState, useEffect, useRef, cx, charColor, miniMarkdown } from '../lib.js';
 import { state, mutate, act, navigate, aiAvailable, setSetting } from '../store.js';
-import { Tabs, Cite, CharSelect, TextArea, Icon, Meter, CharDot } from '../components/ui.js';
+import { Tabs, Cite, CharSelect, TextArea, Icon, Meter, CharDot, rich } from '../components/ui.js';
 import { INTERVIEW, CHARACTER_SECTIONS, VOICE_DIMENSIONS, VOICE_EXERCISES, MODALITIES, cite } from '../mckee.js';
 import { getPath, setPath, uid, characterById, sceneById, newBeat, newLine, locateLine } from '../model.js';
 import { doubleCheckScene } from '../doublecheck.js';
 import { streamChat } from '../api.js';
 import { briefChar, fullChar, sceneForAI, projectMeta, analyzerSummary } from '../aicontext.js';
+import { tr, trn, getLang } from '../i18n.js';
 
 const TAB_DEFS = {
-  interview: { label: 'Interview', ai: false },
-  coach: { label: 'Coach', ai: true },
-  rehearse: { label: 'Rehearse', ai: true },
-  doctor: { label: 'Doctor', ai: true },
-  beats: { label: 'Beats', ai: true },
-  lab: { label: 'Line lab', ai: true },
+  interview: { label: () => tr('Interview'), ai: false },
+  coach: { label: () => tr('Coach'), ai: true },
+  rehearse: { label: () => tr('Rehearse'), ai: true },
+  doctor: { label: () => tr('Doctor'), ai: true },
+  beats: { label: () => tr('Beats'), ai: true },
+  lab: { label: () => tr('Line lab'), ai: true },
 };
 
 function tabsForRoute(route) {
@@ -29,12 +30,12 @@ export function AssistantDrawer() {
   useEffect(() => { if (req.tab && TAB_DEFS[req.tab]) setTab(req.tab); }, [req.tab, req.request?.at]);
   useEffect(() => { if (!tabs.includes(tab)) setTab(tabs[0]); }, [route.name]);
   const active = tabs.includes(tab) ? tab : tabs[0];
-  return html`<aside class="drawer" aria-label="Devil's Advocate">
+  return html`<aside class="drawer" aria-label=${tr('Devil\'s Advocate')}>
     <header class="drawer-head">
-      <div class="drawer-title"><${Icon} name="flame" /> Devil's Advocate</div>
-      <button type="button" class="icon-btn" aria-label="Close panel" onClick=${() => setSetting('drawerOpen', false)}><${Icon} name="close" /></button>
+      <div class="drawer-title"><${Icon} name="flame" /> ${tr('Devil\'s Advocate')}</div>
+      <button type="button" class="icon-btn" aria-label=${tr('Close panel')} onClick=${() => setSetting('drawerOpen', false)}><${Icon} name="close" /></button>
     </header>
-    <${Tabs} small tabs=${tabs.map((t) => ({ id: t, label: TAB_DEFS[t].label }))} active=${active} onChange=${setTab} />
+    <${Tabs} small tabs=${tabs.map((t) => ({ id: t, label: TAB_DEFS[t].label() }))} active=${active} onChange=${setTab} />
     <div class="drawer-body">
       ${active === 'interview' ? html`<${Interview} />` : html`<${AiPanel} key=${active} mode=${active} />`}
     </div>
@@ -69,7 +70,7 @@ function Interview() {
   const scroller = useRef(null);
   useEffect(() => { setSkipped([]); setLog([]); }, [c?.id]);
   useEffect(() => { scroller.current?.scrollTo(0, scroller.current.scrollHeight); }, [log.length, c?.id]);
-  if (!c) return html`<div class="drawer-empty">Add a character to start the interview.</div>`;
+  if (!c) return html`<div class="drawer-empty">${tr('Add a character to start the interview.')}</div>`;
   const queue = INTERVIEW.filter((q) => (revisit || isEmpty(getPath(c, q.path))) && !skipped.includes(q.id));
   const q = queue[0];
   const answered = INTERVIEW.filter((x) => !isEmpty(getPath(c, x.path))).length;
@@ -80,7 +81,8 @@ function Interview() {
     mutate(() => {
       let value = raw;
       if (q.list) value = [...new Set([...(getPath(c, q.path) || []), ...raw.split(',').map((s) => s.trim()).filter(Boolean)])];
-      if (q.choice) value = q.choice.find((ch) => raw.toLowerCase().includes(ch)) || '';
+      // Accept the id or the modality's name in the interface language.
+      if (q.choice) value = MODALITIES.find((m) => q.choice.includes(m.id) && (raw.toLowerCase().includes(m.id) || raw.toLowerCase().includes(m.name.toLowerCase())))?.id || '';
       setPath(c, q.path, value);
       for (const arr of [c.secrets, c.facts]) arr.forEach((x) => { if (!x.id) x.id = uid('item'); });
     });
@@ -90,27 +92,27 @@ function Interview() {
   };
   return html`<div class="interview">
     <div class="drawer-ctx">
-      <span class="small muted">Interviewing</span>
+      <span class="small muted">${tr('Interviewing')}</span>
       <${CharSelect} project=${p} value=${c.id} onChange=${setC} />
-      <label class="toggle small"><input type="checkbox" checked=${revisit} onChange=${(e) => { setRevisit(e.currentTarget.checked); setSkipped([]); }} /> revisit answered</label>
+      <label class="toggle small"><input type="checkbox" checked=${revisit} onChange=${(e) => { setRevisit(e.currentTarget.checked); setSkipped([]); }} /> ${tr('revisit answered')}</label>
     </div>
-    <${Meter} label="Interview progress" value=${(answered / INTERVIEW.length) * 100} />
+    <${Meter} label=${tr('Interview progress')} value=${(answered / INTERVIEW.length) * 100} />
     <div class="chat-log" ref=${scroller}>
-      <div class="bubble bot"><p>No AI needed here. I'll ask McKee's questions from the mask inward to the unsayable, then the voice. Each answer goes straight into ${c.name}'s profile. Skip anything; come back any time.</p></div>
+      <div class="bubble bot"><p>${tr('No AI needed here. I\'ll ask McKee\'s questions from the mask inward to the unsayable, then the voice. Each answer goes straight into {name}\'s profile. Skip anything; come back any time.', { name: c.name })}</p></div>
       ${log.map((m) => html`<div class="bubble bot"><p>${m.q}</p><${Cite} ch=${m.ch} /></div><div class="bubble user"><p>${m.a}</p></div>`)}
       ${q ? html`<div class="bubble bot current"><p>${ask(q.ask)}</p><span class="small muted">${cite(q.ch)}</span>
-        ${q.list ? html`<p class="small muted">Separate items with commas.</p>` : ''}
+        ${q.list ? html`<p class="small muted">${tr('Separate items with commas.')}</p>` : ''}
         ${q.choice ? html`<div class="chip-row">${MODALITIES.map((m) => html`<button type="button" class="chip-btn" onClick=${() => setAnswer(m.id)}>${m.name}</button>`)}</div>` : ''}
-        ${revisit && !isEmpty(getPath(c, q.path)) ? html`<p class="small"><span class="muted">Current:</span> ${String(getPath(c, q.path))}</p>` : ''}
-      </div>` : html`<div class="bubble bot"><p>That's every question for ${c.name}. ${answered < INTERVIEW.length ? 'Some were skipped; tick “revisit answered” or clear the skip list to return to them.' : 'The profile is deep. Now put them under pressure in a scene.'}</p>
-        ${skipped.length ? html`<button type="button" class="link-btn" onClick=${() => setSkipped([])}>Return to skipped questions</button>` : ''}</div>`}
+        ${revisit && !isEmpty(getPath(c, q.path)) ? html`<p class="small"><span class="muted">${tr('Current:')}</span> ${String(getPath(c, q.path))}</p>` : ''}
+      </div>` : html`<div class="bubble bot"><p>${tr('That\'s every question for {name}.', { name: c.name })} ${answered < INTERVIEW.length ? tr('Some were skipped; tick “revisit answered” or clear the skip list to return to them.') : tr('The profile is deep. Now put them under pressure in a scene.')}</p>
+        ${skipped.length ? html`<button type="button" class="link-btn" onClick=${() => setSkipped([])}>${tr('Return to skipped questions')}</button>` : ''}</div>`}
     </div>
     ${q ? html`<div class="chat-input">
-      <${TextArea} value=${answer} onInput=${setAnswer} placeholder="Answer as the author, or in character…" rows=${2}
+      <${TextArea} value=${answer} onInput=${setAnswer} placeholder=${tr('Answer as the author, or in character…')} rows=${2}
         onKeyDown=${(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); save(); } }} />
       <div class="chat-input-actions">
-        <button type="button" class="btn btn-quiet" onClick=${() => { setSkipped([...skipped, q.id]); setAnswer(''); }}>Skip</button>
-        <button type="button" class="btn btn-primary" disabled=${!answer.trim()} onClick=${save}>Answer</button>
+        <button type="button" class="btn btn-quiet" onClick=${() => { setSkipped([...skipped, q.id]); setAnswer(''); }}>${tr('Skip')}</button>
+        <button type="button" class="btn btn-primary" disabled=${!answer.trim()} onClick=${save}>${tr('Answer')}</button>
       </div>
     </div>` : ''}
   </div>`;
@@ -167,15 +169,15 @@ function AiPanel({ mode }) {
   useEffect(() => {
     if (mode === 'lab' && req?.mode === 'alternatives' && req.lineId && aiAvailable() && !busy) {
       const loc = scene && locateLine(scene, req.lineId);
-      if (loc) send(`Give me five alternatives for line ${req.lineId}: “${loc.line.text}”`, { targetLineId: req.lineId });
+      if (loc) send(tr('Give me five alternatives for line {id}: “{text}”', { id: req.lineId, text: loc.line.text }), { targetLineId: req.lineId });
     }
   }, [req?.at]);
 
   if (!aiAvailable()) {
     return html`<div class="ai-off">
-      <p><strong>AI is optional.</strong> Everything else in Dialogue Devil works without it, including the McKee interviewer in the Interview tab.</p>
-      <p>To enable the ${TAB_DEFS[mode].label.toLowerCase()} mode, add an Anthropic API key in Settings (kept in this browser), or start the server with <code>ANTHROPIC_API_KEY</code> set.</p>
-      <button type="button" class="btn btn-primary" onClick=${() => navigate('settings')}>Open Settings</button>
+      <p><strong>${tr('AI is optional.')}</strong> ${tr('Everything else in Dialogue Devil works without it, including the McKee interviewer in the Interview tab.')}</p>
+      <p>${rich('To enable the {mode} mode, add an Anthropic API key in Settings (kept in this browser), or start the server with {env} set.', { mode: TAB_DEFS[mode].label().toLowerCase(), env: html`<code>ANTHROPIC_API_KEY</code>` })}</p>
+      <button type="button" class="btn btn-primary" onClick=${() => navigate('settings')}>${tr('Open Settings')}</button>
     </div>`;
   }
 
@@ -222,7 +224,7 @@ function AiPanel({ mode }) {
       await streamChat({
         apiKey: state.settings.apiKey || undefined,
         signal: controller.signal,
-        body: { mode: mode === 'lab' ? 'alternatives' : mode, model: state.settings.model || undefined, messages: toApiMessages(history, p), context: buildContext(extraMeta) },
+        body: { mode: mode === 'lab' ? 'alternatives' : mode, model: state.settings.model || undefined, lang: getLang(), dialogueLang: p.lang, messages: toApiMessages(history, p), context: buildContext(extraMeta) },
         onEvent: (type, data) => {
           if (type === 'text') acc.text += data.delta;
           else if (type === 'proposal') acc.proposals.push({ ...data, status: {}, speaker: c?.id, partner: partner?.id });
@@ -233,7 +235,7 @@ function AiPanel({ mode }) {
         },
       });
     } catch (err) {
-      if (err.name !== 'AbortError') acc.error = `Connection problem: ${err.message}`;
+      if (err.name !== 'AbortError') acc.error = tr('Connection problem: {reason}', { reason: err.message });
     }
     setBusy(false);
     setLive(null);
@@ -242,42 +244,42 @@ function AiPanel({ mode }) {
   }
 
   const starters = {
-    coach: [`What's missing from ${c?.name || 'this character'}?`, 'Push me past my first choices for the voice.', 'Find the core contradiction.'],
-    rehearse: ['(The scene begins. You speak first.)'],
-    doctor: ['Diagnose this scene. Root causes first.', 'Where is it on the nose?', 'Is the turning point timed right?'],
-    beats: ['Suggest the next beats.', 'Redesign the middle beats so each tops the last.'],
+    coach: [tr('What\'s missing from {name}?', { name: c?.name || tr('this character') }), tr('Push me past my first choices for the voice.'), tr('Find the core contradiction.')],
+    rehearse: [tr('(The scene begins. You speak first.)')],
+    doctor: [tr('Diagnose this scene. Root causes first.'), tr('Where is it on the nose?'), tr('Is the turning point timed right?')],
+    beats: [tr('Suggest the next beats.'), tr('Redesign the middle beats so each tops the last.')],
     lab: [],
   }[mode];
 
   return html`<div class=${cx('ai-panel', `mode-${mode}`)}>
     <div class="drawer-ctx">
-      ${mode === 'coach' ? html`<span class="small muted">Coaching</span><${CharSelect} project=${p} value=${c?.id} onChange=${setC} />` : ''}
-      ${mode === 'rehearse' ? html`<span class="small muted">AI plays</span><${CharSelect} project=${p} value=${c?.id} onChange=${setC} />
-        <span class="small muted">you play</span><${CharSelect} project=${p} value=${partner?.id} onChange=${setPartnerId} />` : ''}
-      ${['doctor', 'beats', 'lab'].includes(mode) ? (scene ? html`<span class="small muted">Scene:</span> <strong class="small">${scene.title}</strong>` : html`<span class="small muted">Open a scene to use this mode.</span>`) : ''}
-      ${messages.length ? html`<button type="button" class="link-btn small" onClick=${() => { if (confirm('Clear this conversation?')) setMessages(() => []); }}>Clear</button>` : ''}
+      ${mode === 'coach' ? html`<span class="small muted">${tr('Coaching')}</span><${CharSelect} project=${p} value=${c?.id} onChange=${setC} />` : ''}
+      ${mode === 'rehearse' ? html`<span class="small muted">${tr('AI plays')}</span><${CharSelect} project=${p} value=${c?.id} onChange=${setC} />
+        <span class="small muted">${tr('you play')}</span><${CharSelect} project=${p} value=${partner?.id} onChange=${setPartnerId} />` : ''}
+      ${['doctor', 'beats', 'lab'].includes(mode) ? (scene ? html`<span class="small muted">${tr('Scene:')}</span> <strong class="small">${scene.title}</strong>` : html`<span class="small muted">${tr('Open a scene to use this mode.')}</span>`) : ''}
+      ${messages.length ? html`<button type="button" class="link-btn small" onClick=${() => { if (confirm(tr('Clear this conversation?'))) setMessages(() => []); }}>${tr('Clear')}</button>` : ''}
     </div>
-    ${mode === 'rehearse' ? html`<p class="small muted ctx-note">Improvise in character. ${c?.name || 'The AI'} answers with a line, and you can reveal its subtext and action. Add any exchange you like to ${scene ? `“${scene.title}”` : 'a scene (open one first)'}. <${Cite} ch=${19} /></p>` : ''}
-    ${mode === 'lab' ? html`<p class="small muted ctx-note">${targetLine ? html`Target: <span class="script">“${targetLine.line.text}”</span>` : 'Click the ✦ button on any line in the workshop to get five alternatives. Never settle for the first choice.'} <${Cite} ch=${7} /></p>` : ''}
+    ${mode === 'rehearse' ? html`<p class="small muted ctx-note">${scene ? tr('Improvise in character. {name} answers with a line, and you can reveal its subtext and action. Add any exchange you like to “{scene}”.', { name: c?.name || tr('The AI'), scene: scene.title }) : tr('Improvise in character. {name} answers with a line, and you can reveal its subtext and action. Add any exchange you like to a scene (open one first).', { name: c?.name || tr('The AI') })} <${Cite} ch=${19} /></p>` : ''}
+    ${mode === 'lab' ? html`<p class="small muted ctx-note">${targetLine ? html`${tr('Target:')} <span class="script">“${targetLine.line.text}”</span>` : tr('Click the ✦ button on any line in the workshop to get five alternatives. Never settle for the first choice.')} <${Cite} ch=${7} /></p>` : ''}
     <div class="chat-log" ref=${scroller}>
       ${!messages.length && !live ? html`<div class="bubble bot"><p>${{
-        coach: `I'll interview you about ${c?.name || 'your character'} and propose profile updates you can apply with one click. Where shall we start?`,
-        rehearse: `I'll stay in character as ${c?.name || 'the character'}${partner ? `; you speak as ${partner.name}` : ''}. Say your first line, or let me open.`,
-        doctor: 'I diagnose the scene with the flaws-and-fixes framework, root causes first, and propose rewrites you can apply.',
-        beats: 'I propose the next beats (action/reaction pairs with lines), each topping the last.',
-        lab: 'Pick a line in the workshop and I will give you five alternatives, each a different tactic.',
-      }[mode]}</p></div>` : ''}
+        coach: () => tr('I\'ll interview you about {name} and propose profile updates you can apply with one click. Where shall we start?', { name: c?.name || tr('your character') }),
+        rehearse: () => (partner ? tr('I\'ll stay in character as {name}; you speak as {partner}. Say your first line, or let me open.', { name: c?.name || tr('the character'), partner: partner.name }) : tr('I\'ll stay in character as {name}. Say your first line, or let me open.', { name: c?.name || tr('the character') })),
+        doctor: () => tr('I diagnose the scene with the flaws-and-fixes framework, root causes first, and propose rewrites you can apply.'),
+        beats: () => tr('I propose the next beats (action/reaction pairs with lines), each topping the last.'),
+        lab: () => tr('Pick a line in the workshop and I will give you five alternatives, each a different tactic.'),
+      }[mode]()}</p></div>` : ''}
       ${messages.map((m) => html`<${Message} m=${m} mode=${mode} scene=${scene} msgKey=${key} />`)}
       ${live ? html`<${Message} m=${live} mode=${mode} scene=${scene} streaming />` : ''}
     </div>
     ${starters?.length && !busy ? html`<div class="chip-row starters">${starters.map((st) => html`<button type="button" class="chip-btn" onClick=${() => send(st)}>${st}</button>`)}</div>` : ''}
     <div class="chat-input">
       <${TextArea} value=${input} onInput=${setInput} rows=${2}
-        placeholder=${mode === 'rehearse' ? `${partner?.name || 'You'}: say your line…` : 'Write to the Devil\'s Advocate…'}
+        placeholder=${mode === 'rehearse' ? tr('{name}: say your line…', { name: partner?.name || tr('You') }) : tr('Write to the Devil\'s Advocate…')}
         onKeyDown=${(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(input); } }} />
       <div class="chat-input-actions">
-        ${busy ? html`<button type="button" class="btn btn-quiet" onClick=${() => abortRef.current?.abort()}>Stop</button>` : ''}
-        <button type="button" class="btn btn-primary" disabled=${busy || !input.trim()} onClick=${() => send(input)}>${busy ? 'Thinking…' : 'Send'}</button>
+        ${busy ? html`<button type="button" class="btn btn-quiet" onClick=${() => abortRef.current?.abort()}>${tr('Stop')}</button>` : ''}
+        <button type="button" class="btn btn-primary" disabled=${busy || !input.trim()} onClick=${() => send(input)}>${busy ? tr('Thinking…') : tr('Send')}</button>
       </div>
     </div>
   </div>`;
@@ -295,7 +297,7 @@ function Message({ m, mode, scene, streaming, msgKey }) {
     ${streaming && !m.text && !m.proposals?.length ? html`<div class="bubble bot typing"><span></span><span></span><span></span></div>` : ''}
     ${(m.proposals || []).map((pr, i) => html`<${Proposal} pr=${pr} scene=${scene} msg=${m} index=${i} msgKey=${msgKey} streaming=${streaming} />`)}
     ${(m.notices || []).map((n) => html`<div class="small muted">${n}</div>`)}
-    ${m.error ? html`<div class="bubble error"><p>${m.error}</p>${/key|Settings/i.test(m.error) ? html`<button type="button" class="link-btn" onClick=${() => navigate('settings')}>Open Settings</button>` : ''}</div>` : ''}
+    ${m.error ? html`<div class="bubble error"><p>${m.error}</p>${/key|Settings|chiave|Impostazioni/i.test(m.error) ? html`<button type="button" class="link-btn" onClick=${() => navigate('settings')}>${tr('Open Settings')}</button>` : ''}</div>` : ''}
   </div>`;
 }
 
@@ -335,30 +337,31 @@ function Speech({ pr, scene, msg, index, msgKey }) {
     markStatus(msgKey, msg.id, index, 'added', true);
   };
   return html`<div class="speech" style=${`--c:${charColor(c)}`}>
-    <div class="speech-name"><${CharDot} character=${c} /> ${c?.name || 'Character'}</div>
+    <div class="speech-name"><${CharDot} character=${c} /> ${c?.name || tr('Character')}</div>
     ${sp.paralanguage ? html`<div class="speech-paren">(${sp.paralanguage})</div>` : ''}
     <div class="speech-text script">${sp.text}</div>
-    ${open ? html`<div class="speech-under"><div><span class="under-label">Subtext</span> ${sp.subtext}</div><div><span class="under-label">Action</span> ${sp.tactic}</div></div>` : ''}
+    ${open ? html`<div class="speech-under"><div><span class="under-label">${tr('Subtext')}</span> ${sp.subtext}</div><div><span class="under-label">${tr('Action')}</span> ${sp.tactic}</div></div>` : ''}
     <div class="speech-actions">
-      <button type="button" class="link-btn small" onClick=${() => setOpen(!open)}>${open ? 'Hide' : 'Reveal'} subtext</button>
-      ${scene && msgKey ? html`<button type="button" class="link-btn small" disabled=${added} onClick=${addToScene}>${added ? 'Added to scene ✓' : 'Add exchange to scene'}</button>` : ''}
+      <button type="button" class="link-btn small" onClick=${() => setOpen(!open)}>${open ? tr('Hide subtext') : tr('Reveal subtext')}</button>
+      ${scene && msgKey ? html`<button type="button" class="link-btn small" disabled=${added} onClick=${addToScene}>${added ? tr('Added to scene ✓') : tr('Add exchange to scene')}</button>` : ''}
     </div>
   </div>`;
 }
 
-const FIELD_INDEX = (() => {
+// Profile fields the AI may propose, labeled in the interface language.
+function fieldIndex() {
   const idx = {};
   for (const s of CHARACTER_SECTIONS) for (const f of s.fields) idx[f.path] = f;
-  for (const d of VOICE_DIMENSIONS) idx[`voice.sliders.${d.id}`] = { label: `Voice: ${d.label}`, type: 'slider' };
-  idx['voice.context'] = { label: 'Voice: low ↔ high context', type: 'slider' };
-  for (const e of VOICE_EXERCISES) idx[`samples.${e.id}`] = { label: `Voice lab: ${e.title}`, type: 'textarea' };
-  idx['secrets.add'] = { label: 'New secret', type: 'add' };
-  idx['facts.add'] = { label: 'New exposition fact', type: 'add' };
+  for (const d of VOICE_DIMENSIONS) idx[`voice.sliders.${d.id}`] = { label: tr('Voice: {label}', { label: d.label }), type: 'slider' };
+  idx['voice.context'] = { label: tr('Voice: low ↔ high context'), type: 'slider' };
+  for (const e of VOICE_EXERCISES) idx[`samples.${e.id}`] = { label: tr('Voice lab: {title}', { title: e.title }), type: 'textarea' };
+  idx['secrets.add'] = { label: tr('New secret'), type: 'add' };
+  idx['facts.add'] = { label: tr('New exposition fact'), type: 'add' };
   return idx;
-})();
+}
 
 function applyUpdate(c, u) {
-  const f = FIELD_INDEX[u.path];
+  const f = fieldIndex()[u.path];
   if (!f) return false;
   if (u.path === 'secrets.add') { c.secrets.push({ id: uid('sec'), text: u.value, dilemma: u.rationale || '' }); return true; }
   if (u.path === 'facts.add') { c.facts.push({ id: uid('fact'), text: u.value, importance: 3 }); return true; }
@@ -373,26 +376,27 @@ function CharacterUpdates({ pr, msg, index, msgKey, disabled }) {
   const p = state.project;
   const c = characterById(p, pr.input.character_id) || p.characters[0];
   const status = pr.status || {};
+  const fields = fieldIndex();
   const apply = (i) => {
     let ok = false;
     act(() => { ok = applyUpdate(c, pr.input.updates[i]); });
     if (msgKey) markStatus(msgKey, msg.id, index, i, ok ? 'applied' : 'invalid');
   };
   return html`<div class="proposal">
-    <div class="proposal-head"><${Icon} name="spark" /> Profile proposals for <strong>${c?.name}</strong></div>
+    <div class="proposal-head"><${Icon} name="spark" /> ${rich('Profile proposals for {name}', { name: html`<strong>${c?.name}</strong>` })}</div>
     ${pr.input.updates.map((u, i) => {
-      const f = FIELD_INDEX[u.path];
+      const f = fields[u.path];
       const cur = f && f.type !== 'add' ? getPath(c, u.path) : null;
       const st = status[i];
       return html`<div class=${cx('proposal-item', st)}>
-        <div class="small"><strong>${f?.label || u.path}</strong>${!f ? html` <span class="muted">(unknown field)</span>` : ''}</div>
-        ${!st && !isEmpty(cur) && String(cur) !== String(u.value) ? html`<div class="small muted strike" title="Current value">${Array.isArray(cur) ? cur.join(', ') : String(cur)}</div>` : ''}
+        <div class="small"><strong>${f?.label || u.path}</strong>${!f ? html` <span class="muted">${tr('(unknown field)')}</span>` : ''}</div>
+        ${!st && !isEmpty(cur) && String(cur) !== String(u.value) ? html`<div class="small muted strike" title=${tr('Current value')}>${Array.isArray(cur) ? cur.join(', ') : String(cur)}</div>` : ''}
         <div class="proposal-value">${u.value}</div>
         ${u.rationale ? html`<div class="small muted">${u.rationale}</div>` : ''}
         <div class="proposal-actions">
-          ${st === 'applied' ? html`<span class="small ok-text">Applied ✓</span>` : st === 'dismissed' ? html`<span class="small muted">Dismissed</span>` : st === 'invalid' ? html`<span class="small muted">Couldn't apply this value</span>` : html`
-            <button type="button" class="btn btn-small" disabled=${disabled || !f || !msgKey} onClick=${() => apply(i)}>Apply</button>
-            <button type="button" class="btn btn-small btn-quiet" disabled=${disabled || !msgKey} onClick=${() => markStatus(msgKey, msg.id, index, i, 'dismissed')}>Dismiss</button>`}
+          ${st === 'applied' ? html`<span class="small ok-text">${tr('Applied ✓')}</span>` : st === 'dismissed' ? html`<span class="small muted">${tr('Dismissed')}</span>` : st === 'invalid' ? html`<span class="small muted">${tr('Couldn\'t apply this value')}</span>` : html`
+            <button type="button" class="btn btn-small" disabled=${disabled || !f || !msgKey} onClick=${() => apply(i)}>${tr('Apply')}</button>
+            <button type="button" class="btn btn-small btn-quiet" disabled=${disabled || !msgKey} onClick=${() => markStatus(msgKey, msg.id, index, i, 'dismissed')}>${tr('Dismiss')}</button>`}
         </div>
       </div>`;
     })}
@@ -401,7 +405,7 @@ function CharacterUpdates({ pr, msg, index, msgKey, disabled }) {
 
 function BeatsProposal({ pr, scene, msg, index, msgKey, disabled }) {
   const p = state.project;
-  const name = (id) => characterById(p, id)?.name || (id === 'action' ? 'action' : '—');
+  const name = (id) => characterById(p, id)?.name || (id === 'action' ? tr('action') : '—');
   const done = pr.status?.applied;
   const apply = () => {
     if (!scene) return;
@@ -423,15 +427,15 @@ function BeatsProposal({ pr, scene, msg, index, msgKey, disabled }) {
     markStatus(msgKey, msg.id, index, 'applied', true);
   };
   return html`<div class="proposal">
-    <div class="proposal-head"><${Icon} name="spark" /> ${pr.input.beats.length} proposed beat${pr.input.beats.length === 1 ? '' : 's'}</div>
+    <div class="proposal-head"><${Icon} name="spark" /> ${trn(pr.input.beats.length, '{n} proposed beat', '{n} proposed beats')}</div>
     ${pr.input.rationale ? html`<p class="small muted">${pr.input.rationale}</p>` : ''}
     ${pr.input.beats.map((b) => html`<div class="proposal-beat">
-      <div class="small"><strong>${name(b.actor_id)}</strong> ${b.action} / <strong>${name(b.reactor_id)}</strong> ${b.reaction}${b.charge != null ? html` · charge ${b.charge > 0 ? '+' : ''}${b.charge}` : ''}</div>
+      <div class="small"><strong>${name(b.actor_id)}</strong> ${b.action} / <strong>${name(b.reactor_id)}</strong> ${b.reaction}${b.charge != null ? html` · ${tr('charge')} ${b.charge > 0 ? '+' : ''}${b.charge}` : ''}</div>
       ${b.lines.map((l) => html`<div class="proposal-line"><span class="small strong">${name(l.speaker_id).toUpperCase()}</span>${l.paren ? html` <em class="small">(${l.paren})</em>` : ''} <span class="script">${l.text}</span>
         ${l.subtext || l.tactic ? html`<div class="small muted">${[l.tactic, l.subtext].filter(Boolean).join(' · ')}</div>` : ''}</div>`)}
     </div>`)}
     <div class="proposal-actions">
-      ${done ? html`<span class="small ok-text">Appended to scene ✓</span>` : html`<button type="button" class="btn btn-small" disabled=${disabled || !scene || !msgKey} onClick=${apply}>Append to scene</button>`}
+      ${done ? html`<span class="small ok-text">${tr('Appended to scene ✓')}</span>` : html`<button type="button" class="btn btn-small" disabled=${disabled || !scene || !msgKey} onClick=${apply}>${tr('Append to scene')}</button>`}
     </div>
   </div>`;
 }
@@ -457,8 +461,8 @@ function LinesProposal({ pr, scene, msg, index, msgKey, disabled }) {
     markStatus(msgKey, msg.id, index, i, how);
   };
   return html`<div class="proposal">
-    <div class="proposal-head"><${Icon} name="swap" /> ${pr.input.options.length} option${pr.input.options.length === 1 ? '' : 's'}${target ? ' for the line' : ''}</div>
-    ${target ? html`<div class="small muted">Current: <span class="script">“${target.line.text}”</span></div>` : ''}
+    <div class="proposal-head"><${Icon} name="swap" /> ${target ? trn(pr.input.options.length, '{n} option for the line', '{n} options for the line') : trn(pr.input.options.length, '{n} option', '{n} options')}</div>
+    ${target ? html`<div class="small muted">${tr('Current:')} <span class="script">“${target.line.text}”</span></div>` : ''}
     ${pr.input.options.map((o, i) => {
       const c = characterById(p, o.speaker_id);
       const st = status[i];
@@ -468,10 +472,10 @@ function LinesProposal({ pr, scene, msg, index, msgKey, disabled }) {
         <div class="small muted">${o.tactic} · ${o.subtext}</div>
         ${o.note ? html`<div class="small">${o.note}</div>` : ''}
         <div class="proposal-actions">
-          ${st ? html`<span class="small ok-text">${st === 'replace' ? 'Used ✓' : st === 'alt' ? 'Kept as alternative ✓' : 'Added ✓'}</span>` : target ? html`
-            <button type="button" class="btn btn-small" disabled=${disabled || !msgKey} onClick=${() => use(i, 'replace')}>Use</button>
-            <button type="button" class="btn btn-small btn-quiet" disabled=${disabled || !msgKey} onClick=${() => use(i, 'alt')}>Keep as alternative</button>` : html`
-            <button type="button" class="btn btn-small" disabled=${disabled || !scene || !msgKey} onClick=${() => use(i, 'add')}>Add to scene</button>`}
+          ${st ? html`<span class="small ok-text">${st === 'replace' ? tr('Used ✓') : st === 'alt' ? tr('Kept as alternative ✓') : tr('Added ✓')}</span>` : target ? html`
+            <button type="button" class="btn btn-small" disabled=${disabled || !msgKey} onClick=${() => use(i, 'replace')}>${tr('Use')}</button>
+            <button type="button" class="btn btn-small btn-quiet" disabled=${disabled || !msgKey} onClick=${() => use(i, 'alt')}>${tr('Keep as alternative')}</button>` : html`
+            <button type="button" class="btn btn-small" disabled=${disabled || !scene || !msgKey} onClick=${() => use(i, 'add')}>${tr('Add to scene')}</button>`}
         </div>
       </div>`;
     })}

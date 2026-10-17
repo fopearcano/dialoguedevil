@@ -339,7 +339,7 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border-radius
 .tick { font-size: 10.5px; fill: var(--muted); font-variant-numeric: tabular-nums; }
 .pole { font-size: 11px; fill: var(--ink-2); font-weight: 700; }
 .x-label { font-size: 10.5px; fill: var(--muted); }
-.end-label { font-size: 10.5px; fill: var(--ink-2); }
+.end-label { font-size: 10.5px; fill: var(--ink-2); paint-order: stroke; stroke: var(--surface); stroke-width: 3px; stroke-linejoin: round; }
 .line-primary { fill: none; stroke: var(--ink-2); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
 .line-secondary { fill: none; stroke: var(--muted); stroke-width: 1.5; stroke-linejoin: round; opacity: 0.8; }
 .wash-pos { fill: var(--wash-pos); }
@@ -801,4 +801,7 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border-radius
   .topbar { padding: 8px 12px; }
   .topbar .btn { padding: 6px 8px; }
   .crumb .muted, .crumb-sep { display: none; }
+}
+@media (max-width: 520px) {
+  .topbar .btn-label { display: none; }
 }

@@ -17,10 +17,12 @@
 import { analyzeScene, flattenLines } from './analysis.js';
 import { secondReadScene } from './secondreader.js';
 import { FLAWS } from './mckee.js';
+import { tr } from './i18n.js';
 
 const RANK = { info: 1, warning: 2, serious: 3, critical: 4 };
 const STATUS_ORDER = { writer: 0, confirmed: 1, flagged: 2, possible: 3 };
 export const SOURCE_LABEL = { rules: 'Rules', reader: 'Second reader', ai: 'AI review', writer: 'Your ear' };
+export const sourceLabel = (x) => (SOURCE_LABEL[x] ? tr(SOURCE_LABEL[x]) : x);
 
 // Fingerprint of everything a reviewer read on a line; a review goes stale
 // for a line as soon as the line changes.

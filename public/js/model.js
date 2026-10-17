@@ -2,6 +2,7 @@
 // scenes, beats and lines.
 
 import { VOICE_DIMENSIONS } from './mckee.js';
+import { normLang, tr } from './i18n.js';
 
 export const uid = (p = 'id') => `${p}_${Math.random().toString(36).slice(2, 8)}${Date.now().toString(36).slice(-4)}`;
 
@@ -13,7 +14,7 @@ export function defaultSliders() {
   return Object.fromEntries(VOICE_DIMENSIONS.map((d) => [d.id, 50]));
 }
 
-export function newCharacter(project, name = 'New character') {
+export function newCharacter(project, name = tr('New character')) {
   const used = new Set((project?.characters || []).map((c) => c.slot));
   let slot = -1;
   for (let i = 0; i < SLOT_COUNT; i++) if (!used.has(i)) { slot = i; break; }
@@ -24,7 +25,7 @@ export function normalizeCharacter(c) {
   const lvl = (x) => ({ text: '', level: 0, ...(x || {}) });
   return {
     id: c.id || uid('char'),
-    name: c.name || 'Unnamed',
+    name: c.name || tr('Unnamed'),
     slot: c.slot ?? -1,
     role: c.role || '',
     logline: c.logline || '',
@@ -51,13 +52,13 @@ export function normalizeCharacter(c) {
   };
 }
 
-export function newScene(project, title = 'New scene') {
+export function newScene(project, title = tr('New scene')) {
   const chars = project?.characters || [];
   const scene = normalizeScene({
     id: uid('scene'),
     title,
     participants: chars.slice(0, 2).map((c) => ({ characterId: c.id })),
-    values: [{ id: uid('val'), positive: project?.coreValue?.positive || 'trust', negative: project?.coreValue?.negative || 'distrust', opening: 0 }],
+    values: [{ id: uid('val'), positive: project?.coreValue?.positive || tr('trust'), negative: project?.coreValue?.negative || tr('distrust'), opening: 0 }],
   });
   return scene;
 }
@@ -65,7 +66,7 @@ export function newScene(project, title = 'New scene') {
 export function normalizeScene(s) {
   return {
     id: s.id || uid('scene'),
-    title: s.title || 'Untitled scene',
+    title: s.title || tr('Untitled scene'),
     heading: s.heading || '',
     description: s.description || '',
     medium: s.medium || '',
@@ -135,14 +136,16 @@ export function normalizeLine(l) {
   };
 }
 
-export function newProject(title = 'Untitled story') {
-  return normalizeProject({ id: uid('proj'), title });
+// lang: the language the dialogue is written in; analysis follows it.
+export function newProject(title = tr('Untitled story'), lang = 'en') {
+  return normalizeProject({ id: uid('proj'), title, lang });
 }
 
 export function normalizeProject(p) {
   return {
     id: p.id || uid('proj'),
-    title: p.title || 'Untitled story',
+    lang: normLang(p.lang),
+    title: p.title || tr('Untitled story'),
     logline: p.logline || '',
     medium: p.medium || 'screen',
     genre: p.genre || '',

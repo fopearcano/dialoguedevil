@@ -1,4 +1,10 @@
-// REST + server-sent-events client for the Dialogue Devil server.
+// REST + server-sent-events client for the Dialogue Devil server. Every
+// request names the interface language, so server messages come back in it.
+
+import { getLang } from './i18n.js';
+
+const H = (extra = {}) => ({ 'x-dd-lang': getLang(), ...extra });
+const JSON_H = () => H({ 'content-type': 'application/json' });
 
 async function json(res) {
   if (res.status === 204) return null;
@@ -7,23 +13,23 @@ async function json(res) {
   return body;
 }
 
-export const listProjects = () => fetch('/api/projects').then(json);
-export const getProject = (id) => fetch(`/api/projects/${encodeURIComponent(id)}`).then(json);
-export const createProject = (body) => fetch('/api/projects', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }).then(json);
+export const listProjects = () => fetch('/api/projects', { headers: H() }).then(json);
+export const getProject = (id) => fetch(`/api/projects/${encodeURIComponent(id)}`, { headers: H() }).then(json);
+export const createProject = (body) => fetch('/api/projects', { method: 'POST', headers: JSON_H(), body: JSON.stringify(body) }).then(json);
 export function saveProject(p, { keepalive = false } = {}) {
   const body = JSON.stringify(p);
   // Browsers cap keepalive bodies at 64 KB.
-  return fetch(`/api/projects/${encodeURIComponent(p.id)}`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body, keepalive: keepalive && body.length < 60000 }).then(json);
+  return fetch(`/api/projects/${encodeURIComponent(p.id)}`, { method: 'PUT', headers: JSON_H(), body, keepalive: keepalive && body.length < 60000 }).then(json);
 }
-export const projectMeta = (id) => fetch(`/api/projects/${encodeURIComponent(id)}/meta`, { cache: 'no-store' }).then(json);
-export const networkInfo = () => fetch('/api/network').then(json);
-export const deleteProject = (id) => fetch(`/api/projects/${encodeURIComponent(id)}`, { method: 'DELETE' }).then(json);
-export const aiStatus = () => fetch('/api/ai/status').then(json);
+export const projectMeta = (id) => fetch(`/api/projects/${encodeURIComponent(id)}/meta`, { cache: 'no-store', headers: H() }).then(json);
+export const networkInfo = () => fetch('/api/network', { headers: H() }).then(json);
+export const deleteProject = (id) => fetch(`/api/projects/${encodeURIComponent(id)}`, { method: 'DELETE', headers: H() }).then(json);
+export const aiStatus = () => fetch('/api/ai/status', { headers: H() }).then(json);
 
 // Streams a chat turn. onEvent(type, data) receives: text, proposal, notice,
 // refusal, error, done.
 export async function streamChat({ body, apiKey, onEvent, signal }) {
-  const headers = { 'content-type': 'application/json' };
+  const headers = JSON_H();
   if (apiKey) headers['x-anthropic-key'] = apiKey;
   const res = await fetch('/api/ai/chat', { method: 'POST', headers, body: JSON.stringify(body), signal });
   if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);

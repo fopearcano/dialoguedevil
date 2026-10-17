@@ -2,7 +2,17 @@
 
 import { html, useState, useRef, useLayoutEffect, useEffect, cx, charColor } from '../lib.js';
 import { cite, shortCite, ALL_TACTICS } from '../mckee.js';
-import { SOURCE_LABEL } from '../doublecheck.js';
+import { sourceLabel } from '../doublecheck.js';
+import { tr } from '../i18n.js';
+
+// A translated sentence with elements in it: rich('Press {key} to stop.',
+// { key: html`<kbd>Esc</kbd>` }) returns text and nodes for htm.
+export function rich(key, vars = {}) {
+  return tr(key).split(/(\{\w+\})/).filter(Boolean).map((part) => {
+    const m = part.match(/^\{(\w+)\}$/);
+    return m && m[1] in vars ? vars[m[1]] : part;
+  });
+}
 
 export function Cite({ ch }) {
   if (ch == null) return null;
@@ -35,8 +45,8 @@ export function TextArea({ value, onInput, placeholder, rows = 2, class: klass, 
     onInput=${(e) => onInput(e.currentTarget.value)} onKeyDown=${onKeyDown} ...${rest}></textarea>`;
 }
 
-export function GerundInput({ value, onInput, placeholder = 'action as a gerund…', class: klass }) {
-  return html`<input class=${cx('input gerund', klass)} type="text" list="dd-tactics" value=${value ?? ''} placeholder=${placeholder}
+export function GerundInput({ value, onInput, placeholder, class: klass }) {
+  return html`<input class=${cx('input gerund', klass)} type="text" list="dd-tactics" value=${value ?? ''} placeholder=${placeholder ?? tr('action as a gerund…')}
     onInput=${(e) => onInput(e.currentTarget.value)} />`;
 }
 
@@ -52,7 +62,7 @@ export function Select({ value, onChange, options, placeholder, class: klass, ar
   </select>`;
 }
 
-export function ListInput({ value = [], onChange, placeholder = 'Type and press Enter' }) {
+export function ListInput({ value = [], onChange, placeholder = tr('Type and press Enter') }) {
   const [draft, setDraft] = useState('');
   const add = (raw) => {
     const items = String(raw).split(',').map((s) => s.trim()).filter(Boolean);
@@ -61,7 +71,7 @@ export function ListInput({ value = [], onChange, placeholder = 'Type and press 
     setDraft('');
   };
   return html`<div class="chips-input">
-    ${value.map((v, i) => html`<span class="chip">${v}<button type="button" aria-label=${`Remove ${v}`} onClick=${() => onChange(value.filter((_, j) => j !== i))}>×</button></span>`)}
+    ${value.map((v, i) => html`<span class="chip">${v}<button type="button" aria-label=${tr('Remove {item}', { item: v })} onClick=${() => onChange(value.filter((_, j) => j !== i))}>×</button></span>`)}
     <input class="chips-entry" value=${draft} placeholder=${value.length ? '' : placeholder}
       onInput=${(e) => { const v = e.currentTarget.value; if (v.includes(',')) add(v); else setDraft(v); }}
       onKeyDown=${(e) => {
@@ -96,11 +106,11 @@ export function Tabs({ tabs, active, onChange, small }) {
 }
 
 const SEVERITY = {
-  good: { label: 'Strength', icon: 'M4 8.5l2.5 2.5L12 5.5' },
-  info: { label: 'Note', icon: 'M8 7v4M8 4.6v.1' },
-  warning: { label: 'Warning', icon: 'M8 4.5v4M8 11v.1' },
-  serious: { label: 'Serious', icon: 'M8 4.5v4M8 11v.1' },
-  critical: { label: 'Critical', icon: 'M5 5l6 6M11 5l-6 6' },
+  good: { icon: 'M4 8.5l2.5 2.5L12 5.5' },
+  info: { icon: 'M8 7v4M8 4.6v.1' },
+  warning: { icon: 'M8 4.5v4M8 11v.1' },
+  serious: { icon: 'M8 4.5v4M8 11v.1' },
+  critical: { icon: 'M5 5l6 6M11 5l-6 6' },
 };
 
 export function SeverityIcon({ severity }) {
@@ -113,7 +123,8 @@ export function SeverityIcon({ severity }) {
   </svg>`;
 }
 
-const STATUS_TAG = { confirmed: (f) => `${f.sources.length} checks`, possible: () => 'verify', writer: () => 'by ear' };
+const STATUS_TAG = { confirmed: (f) => tr('{n} checks', { n: f.sources.length }), possible: () => tr('verify'), writer: () => tr('by ear') };
+const possiblePrefix = (f) => (f.status === 'possible' ? `${tr('Possible:')} ` : '');
 
 // A finding badge: icon + label (never color alone). Merged findings from the
 // double-check also show their status and sources; click to expand.
@@ -124,42 +135,42 @@ export function FindingBadge({ f, onDismiss, onRestore, onUnflag }) {
   return html`<span class=${cx('finding', `sev-${f.severity}`, f.status && `st-${f.status}`, open && 'open', f.dismissed && 'is-dismissed', f.disputed && 'is-disputed')}>
     <button type="button" class="finding-head" onClick=${() => setOpen(!open)} aria-expanded=${open} title=${f.message}>
       <${SeverityIcon} severity=${f.severity} />
-      <span>${f.status === 'possible' ? 'Possible: ' : ''}${f.name}</span>
+      <span>${possiblePrefix(f)}${f.name}</span>
       ${tag ? html`<span class="fs-tag">${tag}</span>` : ''}
-      ${f.disputed ? html`<span class="fs-tag">disputed</span>` : ''}
-      ${f.dismissed ? html`<span class="fs-tag">dismissed</span>` : ''}
+      ${f.disputed ? html`<span class="fs-tag">${tr('disputed')}</span>` : ''}
+      ${f.dismissed ? html`<span class="fs-tag">${tr('dismissed')}</span>` : ''}
     </button>
     ${open ? html`<span class="finding-body">
-      ${f.sources ? html`<span class="finding-sources">Found by ${f.sources.map((x) => SOURCE_LABEL[x] || x).join(' · ')}${f.status === 'possible' ? ': one check only, so verify it' : f.status === 'confirmed' ? ': independent checks agree' : ''}</span>` : ''}
-      ${notes.map((n) => html`<span>${n.source && notes.length > 1 ? html`<strong>${SOURCE_LABEL[n.source] || n.source}:</strong> ` : ''}${n.message}${n.evidence ? html` <em>“${n.evidence}”</em>` : ''}</span>`)}
-      ${f.disputed ? html`<span class="finding-dispute"><strong>AI review disagrees:</strong> ${f.disputed}</span>` : ''}
-      ${f.fix ? html`<span class="finding-fix"><strong>Fix:</strong> ${f.fix}</span>` : ''}
+      ${f.sources ? html`<span class="finding-sources">${tr('Found by {sources}', { sources: f.sources.map(sourceLabel).join(' · ') })}${f.status === 'possible' ? tr(': one check only, so verify it') : f.status === 'confirmed' ? tr(': independent checks agree') : ''}</span>` : ''}
+      ${notes.map((n) => html`<span>${n.source && notes.length > 1 ? html`<strong>${sourceLabel(n.source)}:</strong> ` : ''}${n.message}${n.evidence ? html` <em>“${n.evidence}”</em>` : ''}</span>`)}
+      ${f.disputed ? html`<span class="finding-dispute"><strong>${tr('AI review disagrees:')}</strong> ${f.disputed}</span>` : ''}
+      ${f.fix ? html`<span class="finding-fix"><strong>${tr('Fix:')}</strong> ${f.fix}</span>` : ''}
       ${f.ch ? html`<${Cite} ch=${f.ch} />` : ''}
       ${f.status && f.status !== 'good' ? html`<span class="finding-actions">
-        ${f.status === 'writer' && onUnflag ? html`<button type="button" class="link-btn small" onClick=${onUnflag}>Unflag</button>` : ''}
-        ${f.status !== 'writer' && !f.dismissed && onDismiss ? html`<button type="button" class="link-btn small" onClick=${() => onDismiss(f.flaw)}>Dismiss as deliberate</button>` : ''}
-        ${f.dismissed && onRestore ? html`<button type="button" class="link-btn small" onClick=${() => onRestore(f.flaw)}>Restore</button>` : ''}
+        ${f.status === 'writer' && onUnflag ? html`<button type="button" class="link-btn small" onClick=${onUnflag}>${tr('Unflag')}</button>` : ''}
+        ${f.status !== 'writer' && !f.dismissed && onDismiss ? html`<button type="button" class="link-btn small" onClick=${() => onDismiss(f.flaw)}>${tr('Dismiss as deliberate')}</button>` : ''}
+        ${f.dismissed && onRestore ? html`<button type="button" class="link-btn small" onClick=${() => onRestore(f.flaw)}>${tr('Restore')}</button>` : ''}
       </span>` : ''}
     </span>` : ''}
   </span>`;
 }
 
-export function FindingList({ findings, empty = 'Nothing to flag.', onDismiss, onRestore }) {
-  if (!findings?.length) return html`<p class="muted small">${empty}</p>`;
+export function FindingList({ findings, empty, onDismiss, onRestore }) {
+  if (!findings?.length) return html`<p class="muted small">${empty ?? tr('Nothing to flag.')}</p>`;
   return html`<ul class="finding-list">
     ${findings.map((f) => {
       const tag = STATUS_TAG[f.status]?.(f);
       return html`<li class=${cx(`sev-${f.severity}`, f.dismissed && 'is-dismissed')}>
         <${SeverityIcon} severity=${f.severity} />
         <div>
-          <div class="finding-title">${f.status === 'possible' ? 'Possible: ' : ''}${f.name} ${f.ch ? html`<${Cite} ch=${f.ch} />` : ''}
-            ${tag ? html`<span class="fs-tag">${tag}</span>` : ''}${f.disputed ? html`<span class="fs-tag">disputed</span>` : ''}${f.dismissed ? html`<span class="fs-tag">dismissed</span>` : ''}</div>
-          ${(f.notes || [{ message: f.message }]).map((n) => html`<div class="small">${n.source && (f.notes || []).length > 1 ? html`<strong>${SOURCE_LABEL[n.source]}:</strong> ` : ''}${n.message}</div>`)}
-          ${f.disputed ? html`<div class="small"><strong>AI review disagrees:</strong> ${f.disputed}</div>` : ''}
-          ${f.fix ? html`<div class="small muted"><strong>Fix:</strong> ${f.fix}</div>` : ''}
+          <div class="finding-title">${possiblePrefix(f)}${f.name} ${f.ch ? html`<${Cite} ch=${f.ch} />` : ''}
+            ${tag ? html`<span class="fs-tag">${tag}</span>` : ''}${f.disputed ? html`<span class="fs-tag">${tr('disputed')}</span>` : ''}${f.dismissed ? html`<span class="fs-tag">${tr('dismissed')}</span>` : ''}</div>
+          ${(f.notes || [{ message: f.message }]).map((n) => html`<div class="small">${n.source && (f.notes || []).length > 1 ? html`<strong>${sourceLabel(n.source)}:</strong> ` : ''}${n.message}</div>`)}
+          ${f.disputed ? html`<div class="small"><strong>${tr('AI review disagrees:')}</strong> ${f.disputed}</div>` : ''}
+          ${f.fix ? html`<div class="small muted"><strong>${tr('Fix:')}</strong> ${f.fix}</div>` : ''}
           ${f.status && f.status !== 'good' && (onDismiss || onRestore) ? html`<div>${f.dismissed
-            ? html`<button type="button" class="link-btn small" onClick=${() => onRestore?.(f.flaw)}>Restore</button>`
-            : html`<button type="button" class="link-btn small" onClick=${() => onDismiss?.(f.flaw)}>Dismiss as deliberate</button>`}</div>` : ''}
+            ? html`<button type="button" class="link-btn small" onClick=${() => onRestore?.(f.flaw)}>${tr('Restore')}</button>`
+            : html`<button type="button" class="link-btn small" onClick=${() => onDismiss?.(f.flaw)}>${tr('Dismiss as deliberate')}</button>`}</div>` : ''}
         </div>
       </li>`;
     })}
@@ -179,11 +190,11 @@ export function CharChip({ character, onClick, active }) {
 
 export function CharSelect({ project, value, onChange, placeholder = '—', allowAction }) {
   const opts = (project.characters || []).map((c) => [c.id, c.name]);
-  if (allowAction) opts.push(['__action', '(stage direction)']);
+  if (allowAction) opts.push(['__action', tr('(stage direction)')]);
   const c = (project.characters || []).find((x) => x.id === value);
   return html`<span class="char-select" style=${`--c:${charColor(c)}`}>
     <span class="char-dot"></span>
-    <${Select} value=${value} onChange=${onChange} options=${opts} placeholder=${placeholder} ariaLabel="Character" />
+    <${Select} value=${value} onChange=${onChange} options=${opts} placeholder=${placeholder} ariaLabel=${tr('Character')} />
   </span>`;
 }
 
@@ -213,7 +224,7 @@ export function Modal({ open, title, onClose, children, wide }) {
   if (!open) return null;
   return html`<div class="modal-backdrop" onClick=${(e) => e.target === e.currentTarget && onClose()}>
     <div class=${cx('modal', wide && 'wide')} role="dialog" aria-modal="true" aria-label=${title}>
-      <header class="modal-head"><h2>${title}</h2><button type="button" class="icon-btn" aria-label="Close" onClick=${onClose}>×</button></header>
+      <header class="modal-head"><h2>${title}</h2><button type="button" class="icon-btn" aria-label=${tr('Close')} onClick=${onClose}>×</button></header>
       <div class="modal-body">${children}</div>
     </div>
   </div>`;

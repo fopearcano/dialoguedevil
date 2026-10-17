@@ -2,11 +2,12 @@
 
 import { act as mutate, navigate } from './store.js';
 import { newCharacter, newScene } from './model.js';
+import { tr } from './i18n.js';
 
 export function addCharacter(name) {
   let id;
   mutate((p) => {
-    const c = newCharacter(p, name || `Character ${p.characters.length + 1}`);
+    const c = newCharacter(p, name || tr('Character {n}', { n: p.characters.length + 1 }));
     id = c.id;
     p.characters.push(c);
   });
@@ -17,7 +18,7 @@ export function addCharacter(name) {
 export function addScene(title) {
   let id;
   mutate((p) => {
-    const s = newScene(p, title || `Scene ${p.scenes.length + 1}`);
+    const s = newScene(p, title || tr('Scene {n}', { n: p.scenes.length + 1 }));
     id = s.id;
     p.scenes.push(s);
   });

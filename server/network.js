@@ -3,6 +3,8 @@
 
 import os from 'node:os';
 import crypto from 'node:crypto';
+import { trl } from '../public/js/i18n.js';
+import { reqLang } from './lang.js';
 
 // Loopback, RFC 1918, link-local, CGNAT (100.64/10, used by Tailscale and
 // carrier NAT) and IPv6 unique-local / link-local.
@@ -72,7 +74,7 @@ export function lanGuard({ allowPublic = false, interfaces } = {}) {
   return (req, res, next) => {
     const peer = req.socket.remoteAddress;
     if (allowPublic || isPrivateAddress(peer) || onLocalSubnet(peer, current())) return next();
-    res.status(403).type('text/plain').send('Dialogue Devil only accepts connections from your local network. Start it with DD_ALLOW_PUBLIC=1 to change that.');
+    res.status(403).type('text/plain').send(trl(reqLang(req), 'Dialogue Devil only accepts connections from your local network. Start it with DD_ALLOW_PUBLIC=1 to change that.'));
   };
 }
 
@@ -88,13 +90,13 @@ function cookieValue(req, name) {
   return '';
 }
 
-const PAGE = (wrong) => `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+const PAGE = (wrong, lang) => `<!doctype html><html lang="${lang}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Dialogue Devil</title><style>body{font:16px system-ui,sans-serif;background:#f9f9f7;color:#0b0b0b;display:grid;place-items:center;min-height:100vh;margin:0}
 form{background:#fcfcfb;border:1px solid rgba(0,0,0,.1);border-radius:12px;padding:24px;display:grid;gap:10px;width:min(340px,90vw)}
 input,button{font:inherit;padding:8px 10px;border-radius:8px;border:1px solid rgba(0,0,0,.2)}button{background:#0b0b0b;color:#fff;font-weight:600}
 @media(prefers-color-scheme:dark){body{background:#0d0d0d;color:#f0efec}form{background:#1a1a19;border-color:rgba(255,255,255,.1)}input{background:#222;color:#f0efec}button{background:#f0efec;color:#0d0d0d}}</style></head>
-<body><form method="get" action="/"><strong>Dialogue Devil</strong><span>Enter the access code shown where the server was started.</span>
-${wrong ? '<span style="color:#d03b3b">That code is not right.</span>' : ''}<input name="access" type="password" autocomplete="current-password" autofocus required><button>Open</button></form></body></html>`;
+<body><form method="get" action="/"><strong>Dialogue Devil</strong><span>${trl(lang, 'Enter the access code shown where the server was started.')}</span>
+${wrong ? `<span style="color:#d03b3b">${trl(lang, 'That code is not right.')}</span>` : ''}<input name="access" type="password" autocomplete="current-password" autofocus required aria-label="${trl(lang, 'Access code')}"><button>${trl(lang, 'Open')}</button></form></body></html>`;
 
 // With an access code set, devices other than this machine must present it
 // once (?access=…); a cookie remembers it. Requests from this machine pass.
@@ -107,11 +109,11 @@ export function accessGate({ code = '' } = {}) {
         res.setHeader('Set-Cookie', `dd_access=${encodeURIComponent(given)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000`);
         return res.redirect(302, '/');
       }
-      return res.status(401).type('html').send(PAGE(true));
+      return res.status(401).type('html').send(PAGE(true, reqLang(req)));
     }
     const presented = cookieValue(req, 'dd_access') || req.get('x-dd-access') || '';
     if (presented && sameCode(presented, code)) return next();
-    if (req.path.startsWith('/api/')) return res.status(401).json({ error: 'Access code required' });
-    return res.status(401).type('html').send(PAGE(false));
+    if (req.path.startsWith('/api/')) return res.status(401).json({ error: trl(reqLang(req), 'Access code required') });
+    return res.status(401).type('html').send(PAGE(false, reqLang(req)));
   };
 }

@@ -1,11 +1,12 @@
 import { html, render, useEffect, useState, cx } from './lib.js';
+import { tr, fmtTime } from './i18n.js';
 import {
   state, useStore, boot, navigate, undo, redo, canUndo, canRedo, setSetting, aiAvailable, resolveConflict,
 } from './store.js';
 import { Icon, TacticsDatalist, CharDot } from './components/ui.js';
 import { Sparkline } from './components/viz.js';
 import { valueArc, profileCompleteness } from './analysis.js';
-import { CHARACTER_SECTIONS } from './mckee.js';
+import { CHARACTER_SECTIONS, mediumName } from './mckee.js';
 import { characterById, sceneById } from './model.js';
 import { addCharacter, addScene } from './actions.js';
 import { StoryView } from './views/story.js';
@@ -25,7 +26,7 @@ export function Logo({ size = 28 }) {
 }
 
 function SaveStatus() {
-  const map = { idle: '', pending: 'Unsaved…', saving: 'Saving…', saved: 'Saved', error: 'Not saved', conflict: 'Conflict' };
+  const map = { idle: '', pending: tr('Unsaved…'), saving: tr('Saving…'), saved: tr('Saved'), error: tr('Not saved'), conflict: tr('Conflict') };
   return html`<span class=${cx('save-status', state.saving)} title=${state.error || ''}>${map[state.saving] || ''}</span>`;
 }
 
@@ -33,38 +34,38 @@ function Sidebar({ open, onClose, onProjects }) {
   const p = state.project;
   const r = state.route;
   const go = (path) => { navigate(path); onClose(); };
-  return html`<nav class=${cx('sidebar', open && 'open')} aria-label="Main">
+  return html`<nav class=${cx('sidebar', open && 'open')} aria-label=${tr('Main')}>
     <div class="brand">
       <${Logo} />
       <div>
         <div class="brand-name">Dialogue Devil</div>
-        <div class="brand-sub">after McKee's <em>Dialogue</em></div>
+        <div class="brand-sub">${tr('after McKee\'s')} <em>Dialogue</em></div>
       </div>
     </div>
-    <button type="button" class="project-switch" onClick=${onProjects} title="Switch or create project">
+    <button type="button" class="project-switch" onClick=${onProjects} title=${tr('Switch or create project')}>
       <span class="project-title">${p?.title || '…'}</span>
-      <span class="muted small">${(p?.medium || '').toUpperCase()} · switch ▾</span>
+      <span class="muted small">${mediumName(p?.medium).toUpperCase()} · ${(p?.lang || '').toUpperCase()} · ${tr('switch')} ▾</span>
     </button>
 
     <div class="nav-group">
-      <a href="#/story" class=${cx('nav-item', r.name === 'story' && 'active')} onClick=${() => onClose()}><${Icon} name="story" />Story</a>
-      <a href="#/handbook" class=${cx('nav-item', r.name === 'handbook' && 'active')} onClick=${() => onClose()}><${Icon} name="book" />Handbook</a>
+      <a href="#/story" class=${cx('nav-item', r.name === 'story' && 'active')} onClick=${() => onClose()}><${Icon} name="story" />${tr('Story')}</a>
+      <a href="#/handbook" class=${cx('nav-item', r.name === 'handbook' && 'active')} onClick=${() => onClose()}><${Icon} name="book" />${tr('Handbook')}</a>
     </div>
 
-    <div class="nav-head"><span>Cast</span><button type="button" class="icon-btn" aria-label="Add character" title="Add character" onClick=${() => { addCharacter(); onClose(); }}><${Icon} name="plus" /></button></div>
+    <div class="nav-head"><span>${tr('Cast')}</span><button type="button" class="icon-btn" aria-label=${tr('Add character')} title=${tr('Add character')} onClick=${() => { addCharacter(); onClose(); }}><${Icon} name="plus" /></button></div>
     <div class="nav-group">
       ${(p?.characters || []).map((c) => {
         const depth = profileCompleteness(c, CHARACTER_SECTIONS).overall;
         return html`<a href=${`#/character/${c.id}`} class=${cx('nav-item', r.name === 'character' && r.id === c.id && 'active')} onClick=${() => onClose()}>
           <${CharDot} character=${c} />
           <span class="nav-label">${c.name}</span>
-          <span class="nav-meta" title="Profile depth">${depth}%</span>
+          <span class="nav-meta" title=${tr('Profile depth')}>${depth}%</span>
         </a>`;
       })}
-      ${!p?.characters?.length ? html`<button type="button" class="nav-empty" onClick=${() => go('story')}>No characters yet</button>` : ''}
+      ${!p?.characters?.length ? html`<button type="button" class="nav-empty" onClick=${() => go('story')}>${tr('No characters yet')}</button>` : ''}
     </div>
 
-    <div class="nav-head"><span>Scenes</span><button type="button" class="icon-btn" aria-label="Add scene" title="Add scene" onClick=${() => { addScene(); onClose(); }}><${Icon} name="plus" /></button></div>
+    <div class="nav-head"><span>${tr('Scenes')}</span><button type="button" class="icon-btn" aria-label=${tr('Add scene')} title=${tr('Add scene')} onClick=${() => { addScene(); onClose(); }}><${Icon} name="plus" /></button></div>
     <div class="nav-group">
       ${(p?.scenes || []).map((s) => {
         const arc = valueArc(s)[0];
@@ -77,9 +78,9 @@ function Sidebar({ open, onClose, onProjects }) {
     </div>
 
     <div class="sidebar-foot">
-      <a href="#/settings" class=${cx('nav-item', r.name === 'settings' && 'active')} onClick=${() => onClose()}><${Icon} name="gear" />Settings</a>
+      <a href="#/settings" class=${cx('nav-item', r.name === 'settings' && 'active')} onClick=${() => onClose()}><${Icon} name="gear" />${tr('Settings')}</a>
       <div class="ai-pill-row">
-        <span class=${cx('ai-pill', aiAvailable() ? 'on' : 'off')}>${aiAvailable() ? (state.ai?.mock ? 'AI · mock' : 'AI · on') : 'AI · off'}</span>
+        <span class=${cx('ai-pill', aiAvailable() ? 'on' : 'off')}>${aiAvailable() ? (state.ai?.mock ? tr('AI · mock') : tr('AI · on')) : tr('AI · off')}</span>
         <${SaveStatus} />
       </div>
     </div>
@@ -89,19 +90,19 @@ function Sidebar({ open, onClose, onProjects }) {
 function Topbar({ onMenu }) {
   const p = state.project;
   const r = state.route;
-  let crumb = 'Story';
-  if (r.name === 'character') crumb = (p && characterById(p, r.id)?.name) || 'Character';
-  if (r.name === 'scene') crumb = (p && sceneById(p, r.id)?.title) || 'Scene';
-  if (r.name === 'handbook') crumb = 'Handbook';
-  if (r.name === 'settings') crumb = 'Settings';
+  let crumb = tr('Story');
+  if (r.name === 'character') crumb = (p && characterById(p, r.id)?.name) || tr('Character');
+  if (r.name === 'scene') crumb = (p && sceneById(p, r.id)?.title) || tr('Scene');
+  if (r.name === 'handbook') crumb = tr('Handbook');
+  if (r.name === 'settings') crumb = tr('Settings');
   return html`<header class="topbar">
-    <button type="button" class="icon-btn menu-btn" aria-label="Open menu" onClick=${onMenu}><${Icon} name="menu" /></button>
+    <button type="button" class="icon-btn menu-btn" aria-label=${tr('Open menu')} onClick=${onMenu}><${Icon} name="menu" /></button>
     <div class="crumb"><span class="muted">${p?.title || ''}</span><span class="crumb-sep">/</span><strong>${crumb}</strong></div>
     <div class="topbar-actions">
-      <button type="button" class="icon-btn" title="Undo (Ctrl+Z outside text fields)" aria-label="Undo" disabled=${!canUndo()} onClick=${undo}><${Icon} name="undo" /></button>
-      <button type="button" class="icon-btn" title="Redo" aria-label="Redo" disabled=${!canRedo()} onClick=${redo}><${Icon} name="redo" /></button>
-      <button type="button" class=${cx('btn', state.settings.drawerOpen ? 'btn-quiet active' : 'btn-quiet')} onClick=${() => setSetting('drawerOpen', !state.settings.drawerOpen)} aria-pressed=${state.settings.drawerOpen}>
-        <${Icon} name="flame" /> Devil's Advocate
+      <button type="button" class="icon-btn" title=${tr('Undo (Ctrl+Z outside text fields)')} aria-label=${tr('Undo')} disabled=${!canUndo()} onClick=${undo}><${Icon} name="undo" /></button>
+      <button type="button" class="icon-btn" title=${tr('Redo')} aria-label=${tr('Redo')} disabled=${!canRedo()} onClick=${redo}><${Icon} name="redo" /></button>
+      <button type="button" class=${cx('btn', state.settings.drawerOpen ? 'btn-quiet active' : 'btn-quiet')} onClick=${() => setSetting('drawerOpen', !state.settings.drawerOpen)} aria-pressed=${state.settings.drawerOpen} title=${tr('Devil\'s Advocate')}>
+        <${Icon} name="flame" /> <span class="btn-label">${tr('Devil\'s Advocate')}</span>
       </button>
     </div>
   </header>`;
@@ -110,7 +111,7 @@ function Topbar({ onMenu }) {
 function Main() {
   const r = state.route;
   const p = state.project;
-  if (!p) return html`<div class="loading">Loading…</div>`;
+  if (!p) return html`<div class="loading">${tr('Loading…')}</div>`;
   if (r.name === 'character') {
     const c = characterById(p, r.id);
     return c ? html`<${CharacterView} key=${c.id} character=${c} tab=${r.tab} />` : html`<${NotFound} />`;
@@ -125,7 +126,7 @@ function Main() {
 }
 
 function NotFound() {
-  return html`<div class="page"><div class="empty"><div class="empty-title">Not found in this project.</div><a href="#/story">Back to the story</a></div></div>`;
+  return html`<div class="page"><div class="empty"><div class="empty-title">${tr('Not found in this project.')}</div><a href="#/story">${tr('Back to the story')}</a></div></div>`;
 }
 
 // Another device saved this project after this one loaded it. Nothing is
@@ -134,18 +135,18 @@ function ConflictBanner() {
   const c = state.conflict;
   const [busy, setBusy] = useState(false);
   if (!c) return null;
-  const when = c.remote.updatedAt ? new Date(c.remote.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+  const when = c.remote.updatedAt ? fmtTime(c.remote.updatedAt) : '';
   const choose = async (choice) => {
-    if (choice === 'mine' && !confirm('Replace the other device\'s version with the one on this screen?')) return;
+    if (choice === 'mine' && !confirm(tr('Replace the other device\'s version with the one on this screen?'))) return;
     setBusy(true);
     try { await resolveConflict(choice); } finally { setBusy(false); }
   };
   return html`<div class="banner conflict" role="alert">
-    <div><strong>This project was changed on another device${when ? ` at ${when}` : ''}.</strong> Your edits here are kept in this browser and have not been saved over it.</div>
+    <div><strong>${when ? tr('This project was changed on another device at {time}.', { time: when }) : tr('This project was changed on another device.')}</strong> ${tr('Your edits here are kept in this browser and have not been saved over it.')}</div>
     <div class="banner-actions">
-      <button type="button" class="btn" disabled=${busy} onClick=${() => choose('theirs')}>Load the latest</button>
-      <button type="button" class="btn btn-quiet" disabled=${busy} onClick=${() => choose('copy')}>Save mine as a copy</button>
-      <button type="button" class="btn btn-quiet danger" disabled=${busy} onClick=${() => choose('mine')}>Keep mine</button>
+      <button type="button" class="btn" disabled=${busy} onClick=${() => choose('theirs')}>${tr('Load the latest')}</button>
+      <button type="button" class="btn btn-quiet" disabled=${busy} onClick=${() => choose('copy')}>${tr('Save mine as a copy')}</button>
+      <button type="button" class="btn btn-quiet danger" disabled=${busy} onClick=${() => choose('mine')}>${tr('Keep mine')}</button>
     </div>
   </div>`;
 }
@@ -191,5 +192,5 @@ function App() {
 
 render(html`<${App} />`, document.getElementById('app'));
 boot().catch((err) => {
-  document.getElementById('app').insertAdjacentHTML('beforeend', `<div class="banner error">Could not start: ${String(err.message).replace(/</g, '&lt;')}</div>`);
+  document.getElementById('app').insertAdjacentHTML('beforeend', `<div class="banner error">${tr('Could not start: {reason}', { reason: String(err.message).replace(/</g, '&lt;') })}</div>`);
 });

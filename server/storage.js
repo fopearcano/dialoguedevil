@@ -4,19 +4,21 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { normalizeProject } from '../public/js/model.js';
 import { sampleProject } from '../public/js/sample.js';
+import { N_ } from '../public/js/i18n.js';
 
 const ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
 
-export function createStorage(dir) {
+// lang: the language of the sample created on first run.
+export function createStorage(dir, { lang = 'en' } = {}) {
   const file = (id) => {
-    if (!ID_RE.test(String(id))) throw Object.assign(new Error('Invalid project id'), { status: 400 });
+    if (!ID_RE.test(String(id))) throw Object.assign(new Error(N_('Invalid project id')), { status: 400 });
     return path.join(dir, `${id}.json`);
   };
 
   async function ensure() {
     await fs.mkdir(dir, { recursive: true });
     const entries = await fs.readdir(dir);
-    if (!entries.some((f) => f.endsWith('.json'))) await save(sampleProject());
+    if (!entries.some((f) => f.endsWith('.json'))) await save(sampleProject(lang));
   }
 
   async function list() {
@@ -25,7 +27,7 @@ export function createStorage(dir) {
     for (const f of entries.filter((x) => x.endsWith('.json'))) {
       try {
         const p = JSON.parse(await fs.readFile(path.join(dir, f), 'utf8'));
-        out.push({ id: p.id, title: p.title, logline: p.logline, medium: p.medium, updatedAt: p.updatedAt, characters: (p.characters || []).length, scenes: (p.scenes || []).length });
+        out.push({ id: p.id, lang: p.lang || 'en', title: p.title, logline: p.logline, medium: p.medium, updatedAt: p.updatedAt, characters: (p.characters || []).length, scenes: (p.scenes || []).length });
       } catch { /* skip unreadable files */ }
     }
     return out.sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
@@ -62,7 +64,7 @@ export function createStorage(dir) {
       const current = await get(p.id);
       const currentRev = current?.revision || 0;
       if (current && expectedRevision != null && !force && currentRev !== Number(expectedRevision)) {
-        throw Object.assign(new Error('This project was changed on another device.'), { status: 409, current });
+        throw Object.assign(new Error(N_('This project was changed on another device.')), { status: 409, current });
       }
       p.revision = currentRev + 1;
       p.updatedAt = new Date().toISOString();

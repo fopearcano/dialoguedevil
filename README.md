@@ -1,5 +1,7 @@
 # Dialogue Devil
 
+*Leggi in italiano: [README.it.md](README.it.md). The whole app also works in Italian; see [Italian version](#italian-version).*
+
 An interactive, visual workbench for building fictional characters and developing their dialogue, grounded in Robert McKee's *Dialogue: The Art of Verbal Action for Page, Stage, and Screen* (2016). The book is in [`docs/`](docs/).
 
 McKee's starting point is that dialogue is verbal action. Every line is a tactic a character uses to get what she wants, and the words sit on top of a subtext of desire, antagonism and choice. Dialogue Devil makes that method something you can work through hands-on. You build characters from the inside out and design scenes beat by beat. Each line is written over its subtext, and the scene is checked against the book's flaws and fixes while you write. An optional Claude-powered "Devil's Advocate" can interview you, improvise in character, and propose revisions.
@@ -15,7 +17,7 @@ npm install
 npm start
 ```
 
-Open **http://localhost:4134**. The first run creates an original sample project, *What He Left*, so every view has something to show.
+Open **http://localhost:4134**. The first run creates an original sample project, *What He Left* (*Quello che ha lasciato* when the server runs in Italian), so every view has something to show. The interface follows your browser's language (English or Italian); change it in **Settings → Language**.
 
 The server also listens on your local network. At startup it prints the address to open on a phone, tablet or another computer on the same Wi-Fi:
 
@@ -37,6 +39,7 @@ Dialogue Devil is running.
 | `ANTHROPIC_API_KEY` | (unset) | Enables the AI collaborator for everyone using this server |
 | `DD_MODEL` | `claude-opus-5-5` | Default Claude model |
 | `DD_AI_MOCK` | (unset) | `1` = canned AI responses for offline UI development and demos |
+| `DD_LANG` | from `LANG` | `en` or `it`: language of the console messages and of the first-run sample. The app itself follows each browser. |
 
 ## Using it on other devices
 
@@ -54,6 +57,45 @@ Security defaults:
 - Without `DD_ACCESS_CODE`, anyone on your network can open your projects, and can use the server's `ANTHROPIC_API_KEY` if one is set. On shared networks, set an access code. The server prints a reminder when a key is set without one.
 - An API key typed into Settings stays in that one browser. Each device that should use AI needs its own key, or set `ANTHROPIC_API_KEY` on the server.
 - `DD_ALLOW_PUBLIC=1` exposes the app to anyone who can reach the port. Traffic is plain HTTP. If you need access from outside your network, use a VPN such as Tailscale instead, or put the app behind an HTTPS reverse proxy *and* set an access code.
+
+## Italian version
+
+Dialogue Devil works entirely in Italian: interface, handbook, analysis rules, sample project, AI collaborator, exports, server messages and console.
+
+- **Two language settings** in *Settings → Language*:
+  - the **interface language**: menus, handbook, analyzer messages and AI replies. It's saved per browser, and the first visit follows the browser's language;
+  - the **dialogue language** of the project, saved with the project. It decides which analysis rules read the lines, which voices the table read uses, the language of exports, and the language the AI writes dialogue in.
+  
+  The two are independent: an English interface over an Italian script works, and so does the reverse. A new project starts in the interface language.
+- **Italian knowledge base** (`public/js/kb/it.js`): every principle, flaw, interview question, exercise and tactic, with the same ids and chapter references (`Cap. n`) as the English one. Quotations are free translations of the English text, not the published Italian edition.
+- **Italian analysis rules** (`public/js/lang/it.js`): the same checks, rewritten for Italian rather than translated.
+  - Tactics are Italian gerunds (*-ando/-endo*, clitics allowed: *mettendola alla prova*).
+  - Nearly all Italian is Latinate, so the "arid Latinate" check becomes **abstract, bureaucratic Italian** (*burocratese*: *problematica*, *procedere*, long *-zione/-mento* nouns).
+  - Tokenization splits elisions (*l'ho*, *dell'eredità*). Syllables are counted by vowel groups with hiatus. The passive is *essere/venire/andare* + participle.
+  - Italian lexicons for clichés (*al punto di partenza*, *prendere il toro per le corna*…), on-the-nose and forced-exposition patterns (*Come sai…*, *Ti ricordi quando…*), emotions, fillers and modality. Voice norms are calibrated for Italian.
+  - The second reader stems Italian verbs and strips clitics (*spiegarti*, *spiegando*, *spiegato* → *spieg*).
+- **Italian sample**, *Quello che ha lasciato*: the same characters, scenes and beats, written in Italian rather than translated word for word. It gets the same analysis results as the English one.
+- **AI in Italian**: Claude receives the Italian framework, replies in the interface language, and writes dialogue, subtext and gerund tactics in the project's language.
+- **Exports**: the prose draft uses «caporali» and *disse/chiese*; the annotated breakdown uses AZIONE/REAZIONE; Fountain keeps its required keywords (`Title:`).
+- **Table read** uses an Italian system voice for Italian dialogue (or paces silently if there is none).
+- **Server**: API errors come back in the interface language, and `DD_LANG=it` (or an Italian `LANG`) sets the console and the first-run sample.
+
+Recall of the Italian double-check, measured on `test/fixtures/flawed-lines.it.js` (original lines written for this purpose):
+
+| Set | Rules alone | Rules + second reader |
+|---|---|---|
+| Tuning set, 43 flawed lines | 56% | 100% |
+| First held-out set, 24 lines, measured once before any fix | 38% | 75% |
+| Second held-out set, 20 lines written after tuning and never tuned on | 60% | 80% |
+| Clean lines falsely flagged | 0 / 12 | 0 / 12 |
+
+The first held-out set was then used to fix general gaps, so it no longer counts as independent (it now scores 100%). The second set is the honest figure. On unseen lines the Italian checks miss about one planted flaw in five, more than the English ones, so the AI review and the table read matter more in Italian.
+
+`test/i18n.test.js` scans the source for every string the app can show and fails if the Italian dictionary lacks one. It also checks that the Italian knowledge base mirrors the English one entry for entry.
+
+To add another language, add a dictionary (`public/js/locales/`), a knowledge base (`public/js/kb/`), an analysis pack (`public/js/lang/`), and an entry in `LANGS` (`public/js/i18n.js`).
+
+![Dialogue workshop in Italian](docs/screenshots/workshop-it.png)
 
 ## What's inside
 
@@ -161,7 +203,7 @@ Under the hood, `server/ai.js` uses the official `@anthropic-ai/sdk`:
 - A streaming tool-use loop over the Messages API, with text streamed to the browser over server-sent events.
 - Proposal tools validated with zod before they reach the UI.
 - Eager input streaming on tools.
-- A prompt-cached system block generated from the same knowledge base the UI uses (`public/js/mckee.js`).
+- A prompt-cached system block generated from the same knowledge base the UI uses (`public/js/kb/`), in the writer's language.
 - Server-side refusal fallback (`fallbacks: "default"`) on models that support it.
 
 The default model is Claude Opus 5.5; Settings offers Sonnet 5.5, Haiku 5.5 and Fable 5.1.
@@ -174,9 +216,14 @@ server/ai.js            Claude agent loop, tool validation, error mapping, mock 
 server/prompts.js       System prompt (built from the knowledge base) and tool definitions
 server/storage.js       JSON file storage, one file per project, with revisions and per-project save locks
 server/network.js       LAN guard (private addresses only), optional access code, network addresses
+server/lang.js          Language of each request (x-dd-lang, Accept-Language) and of the console (DD_LANG, LANG)
 public/index.html       Single-page app shell (Preact + htm, no build step)
 public/css/app.css      Design tokens (light/dark), layout, components
-public/js/mckee.js      The knowledge base: principles, schema, interview, tactics, flaws, all with chapter refs
+public/js/kb/en.js, it.js  The knowledge base in each language: principles, schema, interview, tactics, flaws, all with chapter refs
+public/js/mckee.js      Serves the knowledge base in the interface language
+public/js/i18n.js       Interface language: tr()/trl()/trn(), date formats, language detection
+public/js/locales/it.js Italian dictionary (English source string → Italian)
+public/js/lang/en.js, it.js  Per-language analysis packs: tokenizer, syllables, lexicons, patterns, norms, stemmer
 public/js/analysis.js   Dialogue analysis engine: the rules layer (pure functions, shared with tests)
 public/js/secondreader.js  Second reader: the recall-oriented layer
 public/js/doublecheck.js   Merges rules, second reader, AI review and the writer's flags into statuses
@@ -184,10 +231,11 @@ public/js/review.js     Runs the AI review and stores it with per-line fingerpri
 public/js/store.js      State, autosave with revisions, conflict handling, local backups, live updates
 public/js/model.js      Data model and factories
 public/js/sample.js     Original sample project ("What He Left")
+public/js/sample.it.js  Its Italian counterpart ("Quello che ha lasciato")
 public/js/export.js     Fountain / stage / prose / annotated exporters
 public/js/components/   Shared UI and SVG infographics (value arc, radar, spheres, rings, web…)
 public/js/views/        Story, character, scene design, workshop, handbook, settings, assistant drawer
-test/                   node:test suites (analysis, double-check, REST API and conflicts, LAN guard, AI loops against a fake Anthropic endpoint)
+test/                   node:test suites (analysis in both languages, double-check, translation completeness, REST API and conflicts, LAN guard, AI loops against a fake Anthropic endpoint)
 ```
 
 ## Tests
@@ -199,10 +247,11 @@ npm test
 The suites cover:
 - the analysis heuristics (one test per major flaw family), voice measurement, turning-point detection, the exporters and the sample project;
 - the double-check: recall on the tuning and held-out sets, no false alarms on clean lines, statuses, disputes, dismissals and stale AI findings;
+- the Italian version: every displayed string translated with its placeholders, the knowledge bases matching entry for entry, the Italian rules (elisions, passive, *burocratese*, gerunds, stemming), Italian recall and false alarms, the Italian sample and exports;
 - the REST API, including revision conflicts and concurrent saves;
 - the LAN guard and access code;
-- the AI tool-use loop, including the review report. The loop runs offline against a local fake of the Messages API streaming endpoint.
+- the AI tool-use loop, including the review report and the Italian framework and language instructions. The loop runs offline against a local fake of the Messages API streaming endpoint.
 
 ## About the source
 
-Principles are paraphrased and cited by chapter; quotations from the book are kept to a few short lines. The sample scene and characters are original, written to demonstrate the method: a third thing (the watch), exposition used as ammunition, and a backstory revelation as the turning point.
+Principles are paraphrased and cited by chapter; quotations from the book are kept to a few short lines. In the Italian version they are free translations. The sample scene and characters are original, written to demonstrate the method: a third thing (the watch), exposition used as ammunition, and a backstory revelation as the turning point.

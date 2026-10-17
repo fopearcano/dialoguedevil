@@ -4,6 +4,7 @@
 // series color), hover tooltips plus a table view for every data chart.
 
 import { html, useState, useRef, useLayoutEffect, cx, charColor } from '../lib.js';
+import { tr } from '../i18n.js';
 
 function useWidth(ref, fallback = 640) {
   const [w, setW] = useState(fallback);
@@ -33,7 +34,7 @@ function Tooltip({ tip }) {
 }
 
 function DataToggle({ show, setShow }) {
-  return html`<button type="button" class="link-btn small" onClick=${() => setShow(!show)} aria-pressed=${show}>${show ? 'Chart' : 'Table'}</button>`;
+  return html`<button type="button" class="link-btn small" onClick=${() => setShow(!show)} aria-pressed=${show}>${show ? tr('Chart') : tr('Table')}</button>`;
 }
 
 // ---------------------------------------------------------------------------
@@ -46,7 +47,7 @@ export function SceneArc({ arcs, beats, characters = [], turningIndex, primaryId
   const [tip, setTip] = useState(null);
   const [table, setTable] = useState(false);
   const idRef = useRef(`arc${Math.random().toString(36).slice(2, 7)}`);
-  if (!arcs?.length) return html`<div class="viz scene-arc" ref=${ref}><div class="viz-empty">Add a value at stake to see the scene's arc.</div></div>`;
+  if (!arcs?.length) return html`<div class="viz scene-arc" ref=${ref}><div class="viz-empty">${tr('Add a value at stake to see the scene\'s arc.')}</div></div>`;
   const primary = arcs.find((a) => a.value.id === primaryId) || arcs[0];
   const others = arcs.filter((a) => a !== primary);
   const name = (id) => characters.find((c) => c.id === id)?.name || '—';
@@ -80,10 +81,10 @@ export function SceneArc({ arcs, beats, characters = [], turningIndex, primaryId
       i,
       x: Math.min(width - 220, x(i) + 12),
       y: 8,
-      title: i === 0 ? 'Opening charge' : `Beat ${i}${b?.action ? `: ${name(b.actor)} ${b.action}` : ''}${b?.reaction ? ` / ${name(b.reactor)} ${b.reaction}` : ''}`,
+      title: i === 0 ? tr('Opening charge') : `${tr('Beat {n}', { n: i })}${b?.action ? `: ${name(b.actor)} ${b.action}` : ''}${b?.reaction ? ` / ${name(b.reactor)} ${b.reaction}` : ''}`,
       rows: [
         ...arcs.map((a) => ({ value: fmt(a.points[i].charge), label: `${a.value.positive || '+'} / ${a.value.negative || '−'}`, color: a === primary ? signColor(a.points[i].charge) : 'var(--muted)' })),
-        ...(b ? [{ value: String(b.intensity ?? '—'), label: 'intensity' }] : []),
+        ...(b ? [{ value: String(b.intensity ?? '—'), label: tr('intensity') }] : []),
       ],
     });
   };
@@ -98,14 +99,14 @@ export function SceneArc({ arcs, beats, characters = [], turningIndex, primaryId
       <${DataToggle} show=${table} setShow=${setTable} />
     </div>
     ${table ? html`<table class="data-table">
-      <thead><tr><th>Point</th>${arcs.map((a) => html`<th>${a.value.positive}/${a.value.negative}</th>`)}<th>Intensity</th><th>Action / reaction</th></tr></thead>
+      <thead><tr><th>${tr('Point')}</th>${arcs.map((a) => html`<th>${a.value.positive}/${a.value.negative}</th>`)}<th>${tr('Intensity')}</th><th>${tr('Action / reaction')}</th></tr></thead>
       <tbody>${pts.map((p, i) => html`<tr class=${i - 1 === turningIndex ? 'tp-row' : ''}>
-        <td>${i === 0 ? 'Open' : `Beat ${i}`}</td>
+        <td>${i === 0 ? tr('Open') : tr('Beat {n}', { n: i })}</td>
         ${arcs.map((a) => html`<td class="num">${fmt(a.points[i].charge)}</td>`)}
         <td class="num">${i ? beats[i - 1]?.intensity ?? '' : ''}</td>
         <td>${i ? `${beats[i - 1]?.action || ''} / ${beats[i - 1]?.reaction || ''}` : ''}</td>
       </tr>`)}</tbody>
-    </table>` : html`<svg width=${width} height=${totalH} role="img" aria-label=${`Value arc for ${primary.value.positive}/${primary.value.negative}`}
+    </table>` : html`<svg width=${width} height=${totalH} role="img" aria-label=${tr('Value arc for {value}', { value: `${primary.value.positive}/${primary.value.negative}` })}
         onPointerMove=${onMove} onPointerLeave=${() => setTip(null)}>
       <defs>
         <clipPath id=${`${uid}-up`}><rect x="0" y="0" width=${width} height=${y(0)} /></clipPath>
@@ -117,16 +118,16 @@ export function SceneArc({ arcs, beats, characters = [], turningIndex, primaryId
       <text class="pole" x="4" y=${y(-10) + 4}>${primary.value.negative || '−'}</text>
       <path d=${area} class="wash-pos" clip-path=${`url(#${uid}-up)`} />
       <path d=${area} class="wash-neg" clip-path=${`url(#${uid}-dn)`} />
-      ${others.map((a) => html`<path class="line-secondary" d=${a.points.map((p, i) => `${i ? 'L' : 'M'}${x(i)},${y(p.charge)}`).join('')} />
-        <text class="end-label" x=${x(n - 1) - 4} y=${y(a.points[n - 1].charge) - 7} text-anchor="end">${a.value.positive}</text>`)}
+      ${others.map((a) => html`<path class="line-secondary" d=${a.points.map((p, i) => `${i ? 'L' : 'M'}${x(i)},${y(p.charge)}`).join('')} />`)}
       ${tpX != null ? html`<line class="tp-line" x1=${tpX} x2=${tpX} y1=${T - 6} y2=${T + H} />
-        <text class="tp-label" x=${Math.min(tpX + 5, width - 90)} y=${T - 9}>Turning point</text>` : ''}
+        <text class="tp-label" x=${Math.min(tpX + 5, width - 90)} y=${T - 9}>${tr('Turning point')}</text>` : ''}
       <path d=${path} class="line-primary" />
+      ${others.map((a) => html`<text class="end-label" x=${x(n - 1) - 4} y=${y(a.points[n - 1].charge) - 7} text-anchor="end">${a.value.positive}</text>`)}
       ${pts.map((p, i) => html`<circle class="marker" cx=${x(i)} cy=${y(p.charge)} r=${tip?.i === i ? 6 : 4.5} style=${`fill:${signColor(p.charge)}`} />`)}
-      ${!compact && pts.map((p, i) => html`<text class="x-label" x=${x(i)} y=${totalH - 6} text-anchor="middle">${i === 0 ? 'Open' : `B${i}`}</text>`)}
+      ${!compact && pts.map((p, i) => html`<text class="x-label" x=${i === 0 ? x(0) + 6 : x(i)} y=${totalH - 6} text-anchor=${i === 0 ? 'end' : 'middle'}>${i === 0 ? tr('Open') : `${tr('B')}${i}`}</text>`)}
       ${BH ? html`
         <text class="tick" x=${L - 8} y=${T + H + gap + 10} text-anchor="end">10</text>
-        <text class="pole" x="4" y=${T + H + gap + BH / 2 + 4}>intensity</text>
+        <text class="pole" x="4" y=${T + H + gap + BH / 2 + 4}>${tr('intensity')}</text>
         <line class="axis" x1=${L} x2=${width - R} y1=${by(0)} y2=${by(0)} />
         ${beats.map((b, i) => {
           const v = Math.max(0, Math.min(10, Number(b.intensity) || 0));
@@ -165,9 +166,9 @@ export function Radar({ dims, series, size = 300, mini }) {
       <${DataToggle} show=${table} setShow=${setTable} />
     </div>`}
     ${table ? html`<table class="data-table">
-      <thead><tr><th>Dimension</th>${visible.map((s) => html`<th>${s.label}</th>`)}</tr></thead>
+      <thead><tr><th>${tr('Dimension')}</th>${visible.map((s) => html`<th>${s.label}</th>`)}</tr></thead>
       <tbody>${dims.map((d) => html`<tr><td>${d.label}</td>${visible.map((s) => html`<td class="num">${s.values?.[d.id] ?? '—'}</td>`)}</tr>`)}</tbody>
-    </table>` : html`<svg viewBox=${`0 0 ${W} ${W}`} class="radar-svg" role="img" aria-label="Voice fingerprint radar" onPointerLeave=${() => setTip(null)}>
+    </table>` : html`<svg viewBox=${`0 0 ${W} ${W}`} class="radar-svg" role="img" aria-label=${tr('Voice fingerprint radar')} onPointerLeave=${() => setTip(null)}>
       ${[25, 50, 75, 100].map((g) => html`<polygon class="grid" points=${dims.map((d, i) => pt(i, g).join(',')).join(' ')} />`)}
       ${dims.map((d, i) => {
         const [x2, y2] = pt(i, 100);
@@ -205,11 +206,11 @@ export function Radar({ dims, series, size = 300, mini }) {
 export function Spheres({ active, onPick, size = 260, filled = {} }) {
   const c = size / 2;
   const rings = [
-    { id: 'said', r: c - 4, label: 'THE SAID', sub: 'text', ly: 24 },
-    { id: 'unsaid', r: (c - 4) * 0.66, label: 'THE UNSAID', sub: 'conscious subtext', ly: c - (c - 4) * 0.66 + 22 },
-    { id: 'unsayable', r: (c - 4) * 0.32, label: 'UNSAYABLE', sub: 'subconscious', ly: c + 4 },
+    { id: 'said', r: c - 4, label: tr('THE SAID'), sub: tr('text'), ly: 24 },
+    { id: 'unsaid', r: (c - 4) * 0.66, label: tr('THE UNSAID'), sub: tr('conscious subtext'), ly: c - (c - 4) * 0.66 + 22 },
+    { id: 'unsayable', r: (c - 4) * 0.32, label: tr('UNSAYABLE'), sub: tr('subconscious'), ly: c + 4 },
   ];
-  return html`<svg class="spheres" viewBox=${`0 0 ${size} ${size}`} role="img" aria-label="Three spheres of character">
+  return html`<svg class="spheres" viewBox=${`0 0 ${size} ${size}`} role="img" aria-label=${tr('Three spheres of character')}>
     ${rings.map((ring, i) => html`<circle class=${cx('sphere', `sphere-${i + 1}`, active === ring.id && 'active', filled[ring.id] && 'filled')} cx=${c} cy=${c} r=${ring.r}
       tabindex="0" role="button" aria-label=${ring.label} onClick=${() => onPick && onPick(ring.id)} onKeyDown=${(e) => e.key === 'Enter' && onPick && onPick(ring.id)} />`)}
     ${rings.map((ring, i) => html`<g class="sphere-text" pointer-events="none">
@@ -234,14 +235,14 @@ export function seqStep(level) {
 export function ConflictRings({ levels, active, onPick, size = 280 }) {
   const c = size / 2;
   const order = ['physical', 'social', 'personal', 'inner'];
-  const names = { physical: 'Physical', social: 'Social', personal: 'Personal', inner: 'Inner' };
+  const names = { physical: tr('Physical'), social: tr('Social'), personal: tr('Personal'), inner: tr('Inner') };
   return html`<div class="conflict-rings">
-    <svg viewBox=${`0 0 ${size} ${size}`} role="img" aria-label="Forces of antagonism by level">
+    <svg viewBox=${`0 0 ${size} ${size}`} role="img" aria-label=${tr('Forces of antagonism by level')}>
       ${order.map((id, i) => {
         const r = (c - 2) * (1 - i * 0.24);
         const st = seqStep(levels[id]?.level);
         return html`<circle cx=${c} cy=${c} r=${r} class=${cx('ring', active === id && 'active')} style=${`fill:${st.fill}`}
-          tabindex="0" role="button" aria-label=${`${names[id]} conflict, level ${levels[id]?.level ?? 0}`} onClick=${() => onPick && onPick(id)} />`;
+          tabindex="0" role="button" aria-label=${tr('{name} conflict, level {n}', { name: names[id], n: levels[id]?.level ?? 0 })} onClick=${() => onPick && onPick(id)} />`;
       })}
       ${order.map((id, i) => {
         const r = (c - 2) * (1 - i * 0.24);
@@ -271,7 +272,7 @@ export function RelationshipWeb({ center, relationships, characters }) {
     return { r, target, x: cx0 + Math.cos(a) * 150, y: cy0 + Math.sin(a) * 105, label: target?.name || r.label || '—' };
   });
   return html`<div class="viz rel-web">
-    <svg viewBox=${`0 0 ${W} ${H}`} role="img" aria-label="Relationship web" onPointerLeave=${() => setTip(null)}>
+    <svg viewBox=${`0 0 ${W} ${H}`} role="img" aria-label=${tr('Relationship web')} onPointerLeave=${() => setTip(null)}>
       ${nodes.map((nd) => {
         const ch = Number(nd.r.charge) || 0;
         return html`<line x1=${cx0} y1=${cy0} x2=${nd.x} y2=${nd.y} class="edge" style=${`stroke:${signColor(ch)}; stroke-width:${1.5 + (Math.abs(ch) / 10) * 4}`} />`;
@@ -291,7 +292,7 @@ export function RelationshipWeb({ center, relationships, characters }) {
           onPointerEnter=${(e) => {
             const box = e.currentTarget.ownerSVGElement.getBoundingClientRect();
             const k = box.width / W;
-            setTip({ x: Math.min(box.width - 220, nd.x * k + 14), y: nd.y * k, title: nd.label, rows: [{ value: fmt(Number(nd.r.charge) || 0), label: 'relationship charge' }, ...(nd.r.restraint ? [{ value: '', label: `Won't say: ${nd.r.restraint}` }] : [])] });
+            setTip({ x: Math.min(box.width - 220, nd.x * k + 14), y: nd.y * k, title: nd.label, rows: [{ value: fmt(Number(nd.r.charge) || 0), label: tr('relationship charge') }, ...(nd.r.restraint ? [{ value: '', label: tr('Won\'t say: {text}', { text: nd.r.restraint }) }] : [])] });
           }}>
         <circle cx=${nd.x} cy=${nd.y} r="14" class="hit-ring" />
         <circle cx=${nd.x} cy=${nd.y} r="10" class="node" style=${`fill:${nd.target ? charColor(nd.target) : 'var(--muted)'}`} />
@@ -312,7 +313,7 @@ export function Sparkline({ points, width = 120, height = 34 }) {
   const x = (i) => 4 + (i * (width - 8)) / (n - 1);
   const y = (c) => 4 + ((10 - c) / 20) * (height - 8);
   const last = points[n - 1].charge;
-  return html`<svg width=${width} height=${height} class="sparkline" role="img" aria-label=${`Value arc: opens ${points[0].charge}, closes ${last}`}>
+  return html`<svg width=${width} height=${height} class="sparkline" role="img" aria-label=${tr('Value arc: opens {open}, closes {close}', { open: points[0].charge, close: last })}>
     <line class="axis" x1="0" x2=${width} y1=${y(0)} y2=${y(0)} />
     <polyline class="spark-line" points=${points.map((p, i) => `${x(i)},${y(p.charge)}`).join(' ')} />
     <circle class="marker" cx=${x(n - 1)} cy=${y(last)} r="3.5" style=${`fill:${signColor(last)}`} />
@@ -344,7 +345,7 @@ export function HeatMatrix({ rows, cols, get, rowLabel }) {
 
 export function Trialogue({ a, b, third }) {
   const has = Boolean(String(third || '').trim());
-  return html`<svg class="trialogue" viewBox="0 0 260 150" role="img" aria-label=${has ? `Trialogue through ${third}` : 'Duelogue: no third thing'}>
+  return html`<svg class="trialogue" viewBox="0 0 260 150" role="img" aria-label=${has ? tr('Trialogue through {third}', { third }) : tr('Duelogue: no third thing')}>
     ${has ? html`
       <line class="tri-edge" x1="40" y1="118" x2="130" y2="34" />
       <line class="tri-edge" x1="220" y1="118" x2="130" y2="34" />
@@ -353,7 +354,7 @@ export function Trialogue({ a, b, third }) {
       <text x="130" y="12" text-anchor="middle" class="tri-label strong">${String(third).length > 34 ? `${String(third).slice(0, 33)}…` : third}</text>
     ` : html`
       <line class="duel-edge" x1="40" y1="100" x2="220" y2="100" />
-      <text x="130" y="88" text-anchor="middle" class="tri-label">duelogue: nothing between them</text>
+      <text x="130" y="88" text-anchor="middle" class="tri-label">${tr('duelogue: nothing between them')}</text>
     `}
     <circle cx="40" cy=${has ? 118 : 100} r="10" style=${`fill:${charColor(a)}`} class="node" />
     <circle cx="220" cy=${has ? 118 : 100} r="10" style=${`fill:${charColor(b)}`} class="node" />
