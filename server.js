@@ -117,7 +117,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     console.log(`  This computer:  http://localhost:${PORT}`);
     if (open) for (const ip of lanAddresses()) console.log(`  Your network:   http://${ip}:${PORT}   (phones, tablets, other computers on this Wi-Fi/LAN)`);
     else console.log(`  Bound to ${HOST} only (set HOST=0.0.0.0 to open it to your network).`);
-    if (open) console.log(process.env.DD_ALLOW_PUBLIC === '1' ? '  Public addresses: allowed (DD_ALLOW_PUBLIC=1).' : '  Only private-network addresses may connect.');
+    if (open) console.log(process.env.DD_ALLOW_PUBLIC === '1' ? '  Public addresses: allowed (DD_ALLOW_PUBLIC=1).' : '  Only devices on your local network may connect.');
     if (open) console.log(process.env.DD_ACCESS_CODE ? '  Access code: required on other devices (DD_ACCESS_CODE).' : '  Access code: off. Set DD_ACCESS_CODE=… to require one on other devices.');
     console.log(ai.mock ? 'AI: mock mode (DD_AI_MOCK=1)' : ai.serverKey ? `AI: server key found, default model ${ai.defaultModel}` : 'AI: off until a key is added in Settings or ANTHROPIC_API_KEY is set');
     if (open && ai.serverKey && !process.env.DD_ACCESS_CODE) console.log('  Note: devices on your network can use the server\'s API key. Set DD_ACCESS_CODE to restrict access.');

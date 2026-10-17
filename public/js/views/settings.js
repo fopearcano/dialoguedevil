@@ -35,7 +35,7 @@ function DevicesCard() {
         ${net.urls.length ? html`<div class="net-urls">${net.urls.map((u) => html`<div class="net-url"><code>${u}</code><button type="button" class="btn btn-quiet" onClick=${() => copy(u)}>Copy</button></div>`)}</div>`
           : html`<p class="small">Open to the network, but the server found no network address. Is this computer connected to Wi-Fi or a cable?</p>`}
         <ul class="small">
-          <li>${net.allowPublic ? html`<strong>Public addresses allowed</strong> (DD_ALLOW_PUBLIC=1): anyone who can reach this port can connect.` : 'Only devices with private-network addresses (home/office LAN, VPNs like Tailscale) can connect.'}</li>
+          <li>${net.allowPublic ? html`<strong>Public addresses allowed</strong> (DD_ALLOW_PUBLIC=1): anyone who can reach this port can connect.` : 'Only devices on your local network can connect: private addresses (home/office LAN, VPNs like Tailscale) and this computer\'s own subnet.'}</li>
           <li>${net.accessCode ? 'Other devices must enter the access code once (DD_ACCESS_CODE); this computer never needs it.' : html`No access code: anyone on your network can open it${state.ai?.serverKey ? ' and use the server\'s API key' : ''}. Start the server with <code>DD_ACCESS_CODE=…</code> to require one.`}</li>
           <li>If another device cannot connect, allow port ${net.port} for Node.js in this computer's firewall.</li>
           <li>Your API key in this browser stays here; enter it on each device that should use AI (or set <code>ANTHROPIC_API_KEY</code> on the server).</li>

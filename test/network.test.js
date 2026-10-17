@@ -1,7 +1,7 @@
 // LAN guard and access code, tested with minimal request/response doubles.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { isPrivateAddress, isLoopback, lanGuard, accessGate } from '../server/network.js';
+import { isPrivateAddress, isLoopback, onLocalSubnet, lanGuard, accessGate } from '../server/network.js';
 
 function fakeReq({ ip = '192.168.1.20', path = '/', query = {}, cookie = '', headers = {} } = {}) {
   const h = { cookie, ...headers };
@@ -44,6 +44,22 @@ test('LAN guard admits private peers, refuses public ones, ignores X-Forwarded-F
   assert.equal(out.passed, false);
   assert.equal(out.res.statusCode, 403);
   assert.equal(run(lanGuard({ allowPublic: true }), fakeReq({ ip: '203.0.113.7' })).passed, true);
+});
+
+test('devices on this computer\'s own subnet count as local, even on public ranges', () => {
+  const nics = {
+    eth0: [{ family: 'IPv4', address: '198.51.100.20', netmask: '255.255.255.0', internal: false }],
+    wide: [{ family: 'IPv4', address: '203.0.113.9', netmask: '255.0.0.0', internal: false }],
+    lo: [{ family: 'IPv4', address: '127.0.0.1', netmask: '255.0.0.0', internal: true }],
+  };
+  assert.equal(onLocalSubnet('198.51.100.77', nics), true);
+  assert.equal(onLocalSubnet('::ffff:198.51.100.20', nics), true);
+  assert.equal(onLocalSubnet('198.51.101.77', nics), false);
+  assert.equal(onLocalSubnet('203.1.2.3', nics), false, 'a /8 is too wide to trust');
+  assert.equal(onLocalSubnet('2001:db8::1', nics), false);
+  const guard = lanGuard({ interfaces: nics });
+  assert.equal(run(guard, fakeReq({ ip: '198.51.100.77' })).passed, true);
+  assert.equal(run(guard, fakeReq({ ip: '198.51.99.1' })).passed, false);
 });
 
 test('access code: off by default; this machine is exempt', () => {

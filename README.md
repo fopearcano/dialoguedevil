@@ -23,7 +23,7 @@ The server also listens on your local network. At startup it prints the address 
 Dialogue Devil is running.
   This computer:  http://localhost:4134
   Your network:   http://192.168.1.23:4134   (phones, tablets, other computers on this Wi-Fi/LAN)
-  Only private-network addresses may connect.
+  Only devices on your local network may connect.
   Access code: off. Set DD_ACCESS_CODE=… to require one on other devices.
 ```
 
@@ -50,7 +50,7 @@ Every device works on the same projects:
 - **Nothing lost on close or disconnect.** Edits are copied to the browser as you type and flushed when the tab is hidden or closed. If the server can't be reached, they're kept locally and restored the next time you open the project.
 
 Security defaults:
-- Only private-network addresses can connect: home and office LANs, 10.x, 172.16–31.x, 192.168.x, and VPN ranges such as Tailscale's 100.64/10. The check uses the connection's real address; `X-Forwarded-For` is ignored.
+- Only devices on your local network can connect. That means private addresses (10.x, 172.16–31.x, 192.168.x, and VPN ranges such as Tailscale's 100.64/10), plus devices on this computer's own subnet, for networks that use public addresses internally. The check uses the connection's real address; `X-Forwarded-For` is ignored.
 - Without `DD_ACCESS_CODE`, anyone on your network can open your projects, and can use the server's `ANTHROPIC_API_KEY` if one is set. On shared networks, set an access code. The server prints a reminder when a key is set without one.
 - An API key typed into Settings stays in that one browser. Each device that should use AI needs its own key, or set `ANTHROPIC_API_KEY` on the server.
 - `DD_ALLOW_PUBLIC=1` exposes the app to anyone who can reach the port. Traffic is plain HTTP. If you need access from outside your network, use a VPN such as Tailscale instead, or put the app behind an HTTPS reverse proxy *and* set an access code.

@@ -19,6 +19,29 @@ export function isPrivateAddress(addr) {
   return /^f[cd][0-9a-f]{2}:/.test(a) || /^fe[89ab][0-9a-f]:/.test(a);
 }
 
+const ipv4 = (addr) => {
+  const m = String(addr || '').toLowerCase().replace(/^::ffff:/, '').match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  return m ? ((Number(m[1]) << 24) | (Number(m[2]) << 16) | (Number(m[3]) << 8) | Number(m[4])) >>> 0 : null;
+};
+
+// Devices on the same subnet as one of this computer's network interfaces
+// are on its LAN even when the LAN doesn't use private addresses (some
+// campus and ISP networks don't). Subnets wider than /16 are not trusted.
+export function onLocalSubnet(addr, interfaces = os.networkInterfaces()) {
+  const ip = ipv4(addr);
+  if (ip == null) return false;
+  for (const list of Object.values(interfaces)) {
+    for (const ni of list || []) {
+      if (ni.internal || ni.family !== 'IPv4') continue;
+      const base = ipv4(ni.address);
+      const mask = ipv4(ni.netmask);
+      const prefix = mask == null ? 0 : mask.toString(2).replace(/0/g, '').length;
+      if (base != null && prefix >= 16 && ((ip & mask) >>> 0) === ((base & mask) >>> 0)) return true;
+    }
+  }
+  return false;
+}
+
 export function isLoopback(addr) {
   let a = String(addr || '').toLowerCase();
   if (a.startsWith('::ffff:')) a = a.slice(7);
@@ -38,9 +61,17 @@ export function lanAddresses() {
 
 // Requests are judged by the socket's peer address; X-Forwarded-For is not
 // trusted, so the guard cannot be talked around by a header.
-export function lanGuard({ allowPublic = false } = {}) {
+export function lanGuard({ allowPublic = false, interfaces } = {}) {
+  let cached = null;
+  let cachedAt = 0;
+  const current = () => {
+    if (interfaces) return interfaces;
+    if (!cached || Date.now() - cachedAt > 10000) { cached = os.networkInterfaces(); cachedAt = Date.now(); }
+    return cached;
+  };
   return (req, res, next) => {
-    if (allowPublic || isPrivateAddress(req.socket.remoteAddress)) return next();
+    const peer = req.socket.remoteAddress;
+    if (allowPublic || isPrivateAddress(peer) || onLocalSubnet(peer, current())) return next();
     res.status(403).type('text/plain').send('Dialogue Devil only accepts connections from your local network. Start it with DD_ALLOW_PUBLIC=1 to change that.');
   };
 }
