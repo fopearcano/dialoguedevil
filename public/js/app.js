@@ -1,6 +1,6 @@
 import { html, render, useEffect, useState, cx } from './lib.js';
 import {
-  state, useStore, boot, navigate, undo, redo, canUndo, canRedo, setSetting, aiAvailable,
+  state, useStore, boot, navigate, undo, redo, canUndo, canRedo, setSetting, aiAvailable, resolveConflict,
 } from './store.js';
 import { Icon, TacticsDatalist, CharDot } from './components/ui.js';
 import { Sparkline } from './components/viz.js';
@@ -25,7 +25,7 @@ export function Logo({ size = 28 }) {
 }
 
 function SaveStatus() {
-  const map = { idle: '', pending: 'Unsaved…', saving: 'Saving…', saved: 'Saved', error: 'Save failed' };
+  const map = { idle: '', pending: 'Unsaved…', saving: 'Saving…', saved: 'Saved', error: 'Not saved', conflict: 'Conflict' };
   return html`<span class=${cx('save-status', state.saving)} title=${state.error || ''}>${map[state.saving] || ''}</span>`;
 }
 
@@ -128,6 +128,28 @@ function NotFound() {
   return html`<div class="page"><div class="empty"><div class="empty-title">Not found in this project.</div><a href="#/story">Back to the story</a></div></div>`;
 }
 
+// Another device saved this project after this one loaded it. Nothing is
+// overwritten until the writer chooses.
+function ConflictBanner() {
+  const c = state.conflict;
+  const [busy, setBusy] = useState(false);
+  if (!c) return null;
+  const when = c.remote.updatedAt ? new Date(c.remote.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+  const choose = async (choice) => {
+    if (choice === 'mine' && !confirm('Replace the other device\'s version with the one on this screen?')) return;
+    setBusy(true);
+    try { await resolveConflict(choice); } finally { setBusy(false); }
+  };
+  return html`<div class="banner conflict" role="alert">
+    <div><strong>This project was changed on another device${when ? ` at ${when}` : ''}.</strong> Your edits here are kept in this browser and have not been saved over it.</div>
+    <div class="banner-actions">
+      <button type="button" class="btn" disabled=${busy} onClick=${() => choose('theirs')}>Load the latest</button>
+      <button type="button" class="btn btn-quiet" disabled=${busy} onClick=${() => choose('copy')}>Save mine as a copy</button>
+      <button type="button" class="btn btn-quiet danger" disabled=${busy} onClick=${() => choose('mine')}>Keep mine</button>
+    </div>
+  </div>`;
+}
+
 function Toast() {
   if (!state.toast) return null;
   return html`<div class=${cx('toast', state.toast.kind)} role="status">${state.toast.message}</div>`;
@@ -150,13 +172,16 @@ function App() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
   const drawer = state.settings.drawerOpen;
+  // The scrim is always rendered and toggled with `hidden`: inserting it on
+  // open would let Preact reuse the .main-col element mid-click, and the same
+  // tap that opened the menu would close it.
   return html`<div class=${cx('shell', drawer && 'with-drawer')}>
     <${TacticsDatalist} />
-    <${Sidebar} open=${menu} onClose=${() => setMenu(false)} onProjects=${() => setProjects(true)} />
-    ${menu ? html`<div class="scrim" onClick=${() => setMenu(false)}></div>` : ''}
+    <${Sidebar} open=${menu} onClose=${() => setMenu(false)} onProjects=${() => { setMenu(false); setProjects(true); }} />
+    <div class="scrim" hidden=${!menu} onClick=${() => setMenu(false)}></div>
     <div class="main-col">
       <${Topbar} onMenu=${() => setMenu(true)} />
-      <main id="main">${state.error && state.saving === 'error' ? html`<div class="banner error">${state.error}</div>` : ''}<${Main} /></main>
+      <main id="main"><${ConflictBanner} />${state.error && state.saving === 'error' ? html`<div class="banner error">${state.error}</div>` : ''}<${Main} /></main>
     </div>
     ${drawer && state.project ? html`<div class="drawer-scrim" onClick=${() => setSetting('drawerOpen', false)}></div><${AssistantDrawer} />` : ''}
     <${ProjectsModal} open=${projects} onClose=${() => setProjects(false)} />

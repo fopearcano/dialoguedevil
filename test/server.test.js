@@ -8,6 +8,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 const requests = [];
+const reviewRequests = [];
 let fake;
 let app;
 let base;
@@ -26,7 +27,19 @@ before(async () => {
     let body = '';
     req.on('data', (c) => { body += c; });
     req.on('end', () => {
-      requests.push({ url: req.url, headers: req.headers, body: JSON.parse(body || '{}') });
+      const parsed = JSON.parse(body || '{}');
+      if (String(parsed.messages?.[0]?.content).startsWith('Double-check')) {
+        reviewRequests.push(parsed);
+        return sse(res, [
+          start('msg_r'),
+          { type: 'content_block_start', index: 0, content_block: { type: 'tool_use', id: 'toolu_r', name: 'report_issues', input: {} } },
+          { type: 'content_block_delta', index: 0, delta: { type: 'input_json_delta', partial_json: '{"summary":"One miss, one false alarm.","issues":[{"line_id":"line_1","flaw":"onTheNose","severity":"serious","evidence":"I am angry","note":"Names the feeling.","fix":"Act it out."}],"disputes":[{"line_id":"line_2","flaw":"cliche","reason":"Ironic on purpose."}]}' } },
+          { type: 'content_block_stop', index: 0 },
+          { type: 'message_delta', delta: { stop_reason: 'tool_use', stop_sequence: null }, usage: { output_tokens: 40 } },
+          { type: 'message_stop' },
+        ]);
+      }
+      requests.push({ url: req.url, headers: req.headers, body: parsed });
       if (requests.length === 1) {
         sse(res, [
           start('msg_1'),
@@ -124,4 +137,61 @@ test('AI endpoint rejects a conversation that does not end with the writer', asy
     body: JSON.stringify({ mode: 'coach', messages: [{ role: 'assistant', content: 'hi' }] }),
   });
   assert.match(await res.text(), /event: error/);
+});
+
+const put = (p, query = '') => fetch(`${base}/api/projects/${p.id}${query}`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(p) });
+
+test('saves carry revisions; a stale save is refused with the current version', async () => {
+  const created = await (await fetch(`${base}/api/projects`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ title: 'Sync' }) })).json();
+  assert.equal(created.revision, 1);
+  assert.deepEqual(await (await fetch(`${base}/api/projects/${created.id}/meta`)).json(), { id: created.id, revision: 1, updatedAt: created.updatedAt });
+
+  // Device A saves on top of revision 1.
+  const a = await (await put({ ...created, logline: 'from A' })).json();
+  assert.equal(a.revision, 2);
+
+  // Device B still holds revision 1: refused, and told what is there now.
+  const stale = await put({ ...created, logline: 'from B' });
+  assert.equal(stale.status, 409);
+  const body = await stale.json();
+  assert.equal(body.current.logline, 'from A');
+  assert.equal(body.current.revision, 2);
+  assert.equal((await (await fetch(`${base}/api/projects/${created.id}`)).json()).logline, 'from A');
+
+  // B chooses to keep its version.
+  const forced = await (await put({ ...created, logline: 'from B' }, '?force=1')).json();
+  assert.equal(forced.revision, 3);
+  assert.equal(forced.logline, 'from B');
+
+  // Concurrent saves from the same revision: exactly one wins.
+  const results = await Promise.all([put({ ...forced, logline: 'x' }), put({ ...forced, logline: 'y' })]);
+  assert.deepEqual(results.map((r) => r.status).sort(), [200, 409]);
+  assert.equal((await (await fetch(`${base}/api/projects/${created.id}/meta`)).json()).revision, 4);
+  assert.equal((await fetch(`${base}/api/projects/nope_404/meta`)).status, 404);
+});
+
+test('network endpoint reports how other devices reach the server', async () => {
+  const net = await (await fetch(`${base}/api/network`)).json();
+  assert.equal(net.port, app.address().port);
+  assert.equal(net.accessCode, false);
+  assert.equal(net.thisDevice, true);
+  assert.ok(Array.isArray(net.urls));
+});
+
+test('AI review: report_issues ends the turn after one request and is validated', async () => {
+  const res = await fetch(`${base}/api/ai/chat`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ mode: 'review', messages: [{ role: 'user', content: 'Double-check this scene.' }], context: { meta: { sceneId: 'scene_1' }, data: { scene: { id: 'scene_1' } } } }),
+  });
+  const text = await res.text();
+  assert.equal(reviewRequests.length, 1, 'terminal tool: no second request');
+  assert.equal(reviewRequests[0].output_config.effort, 'high');
+  assert.ok(reviewRequests[0].tools.some((t) => t.name === 'report_issues'));
+  const proposal = text.split('\n\n').find((c) => c.startsWith('event: proposal'));
+  const data = JSON.parse(proposal.match(/^data: (.*)$/m)[1]);
+  assert.equal(data.tool, 'report_issues');
+  assert.equal(data.input.issues[0].flaw, 'onTheNose');
+  assert.equal(data.input.disputes[0].reason, 'Ironic on purpose.');
+  assert.match(text, /event: done/);
 });

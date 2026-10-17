@@ -80,6 +80,8 @@ export function normalizeScene(s) {
     turningPoint: { type: 'action', note: '', ...(s.turningPoint || {}) },
     beats: (s.beats || []).map(normalizeBeat),
     notes: s.notes || '',
+    dismissed: Array.isArray(s.dismissed) ? s.dismissed : [],
+    review: s.review && s.review.at ? { hashes: {}, issues: [], disputes: [], summary: '', model: '', ...s.review } : null,
   };
 }
 
@@ -128,6 +130,8 @@ export function normalizeLine(l) {
     design: l.design || '',
     exposition: !!l.exposition,
     alternatives: Array.isArray(l.alternatives) ? l.alternatives : [],
+    dismissed: Array.isArray(l.dismissed) ? l.dismissed : [],
+    marked: !!l.marked,
   };
 }
 
@@ -149,6 +153,7 @@ export function normalizeProject(p) {
     characters: (p.characters || []).map(normalizeCharacter),
     scenes: (p.scenes || []).map(normalizeScene),
     chats: p.chats || {},
+    revision: Number(p.revision) || 0,
     createdAt: p.createdAt || new Date().toISOString(),
     updatedAt: p.updatedAt || new Date().toISOString(),
   };

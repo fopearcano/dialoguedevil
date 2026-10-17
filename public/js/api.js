@@ -3,14 +3,20 @@
 async function json(res) {
   if (res.status === 204) return null;
   const body = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
+  if (!res.ok) throw Object.assign(new Error(body.error || `HTTP ${res.status}`), { status: res.status, body });
   return body;
 }
 
 export const listProjects = () => fetch('/api/projects').then(json);
 export const getProject = (id) => fetch(`/api/projects/${encodeURIComponent(id)}`).then(json);
 export const createProject = (body) => fetch('/api/projects', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }).then(json);
-export const saveProject = (p) => fetch(`/api/projects/${encodeURIComponent(p.id)}`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(p) }).then(json);
+export function saveProject(p, { keepalive = false } = {}) {
+  const body = JSON.stringify(p);
+  // Browsers cap keepalive bodies at 64 KB.
+  return fetch(`/api/projects/${encodeURIComponent(p.id)}`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body, keepalive: keepalive && body.length < 60000 }).then(json);
+}
+export const projectMeta = (id) => fetch(`/api/projects/${encodeURIComponent(id)}/meta`, { cache: 'no-store' }).then(json);
+export const networkInfo = () => fetch('/api/network').then(json);
 export const deleteProject = (id) => fetch(`/api/projects/${encodeURIComponent(id)}`, { method: 'DELETE' }).then(json);
 export const aiStatus = () => fetch('/api/ai/status').then(json);
 

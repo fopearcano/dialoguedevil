@@ -331,7 +331,8 @@ export function analyzeLine(line, ctx = {}) {
   const neutral = NEUTRAL_PHRASES.filter((c) => containsPhrase(lower, c));
   if (neutral.length) out.push(finding('characterNeutral', 'warning', `Ready-made phrase: “${neutral.slice(0, 3).join('”, “')}”. How would only this character say it?`, { terms: neutral }));
   if (CLUTTER.some((r) => r.test(text))) out.push(finding('clutter', 'warning', 'Small talk. Unless it hides a subtext, cut it.'));
-  const latinateHeavy = m.words >= 8 && (m.latinate / m.words >= 0.15 || m.syllables / m.words >= 1.75);
+  // Polysyllabic only counts when it is Latinate: names and numbers are long too.
+  const latinateHeavy = m.words >= 8 && (m.latinate / m.words >= 0.15 || (m.syllables / m.words >= 1.75 && m.latinate >= 1));
   if (latinateHeavy && (sliders.latinate ?? 40) < 65) out.push(finding('arid', 'info', `Dry and Latinate (${m.latinate} Latinate word${m.latinate === 1 ? '' : 's'}, ${round(m.syllables / m.words, 2)} syllables/word). Character-specific, or arid?`));
   if (m.passive > 0) out.push(finding('passive', 'info', `Passive construction (${m.passive}). Test the active case.`));
   const limit = SPEECH_LIMIT[ctx.medium] || 60;
@@ -441,9 +442,13 @@ export function analyzeScene(scene, project = {}) {
         res.push(finding('echo', 'info', `Echoes the previous line: “${shared.slice(0, 4).join('”, “')}”. Deliberate, or accidental?`, { terms: shared }));
       }
     }
+    // Findings the writer dismissed as deliberate stay visible on request
+    // but no longer count against the scene.
+    const dismissed = entry.line.dismissed || [];
+    for (const f of res) if (dismissed.includes(f.flaw)) f.dismissed = true;
     lineFindings[entry.line.id] = res;
-    for (const f of res) if (f.severity !== 'good') counts[f.flaw] = (counts[f.flaw] || 0) + 1;
-    if (res.some((f) => f.severity === 'serious' || f.severity === 'warning')) flagged++;
+    for (const f of res) if (f.severity !== 'good' && !f.dismissed) counts[f.flaw] = (counts[f.flaw] || 0) + 1;
+    if (res.some((f) => !f.dismissed && (f.severity === 'serious' || f.severity === 'warning'))) flagged++;
   });
 
   const beats = scene.beats || [];

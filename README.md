@@ -17,14 +17,43 @@ npm start
 
 Open **http://localhost:4134**. The first run creates an original sample project, *What He Left*, so every view has something to show.
 
+The server also listens on your local network. At startup it prints the address to open on a phone, tablet or another computer on the same Wi-Fi:
+
+```
+Dialogue Devil is running.
+  This computer:  http://localhost:4134
+  Your network:   http://192.168.1.23:4134   (phones, tablets, other computers on this Wi-Fi/LAN)
+  Only private-network addresses may connect.
+  Access code: off. Set DD_ACCESS_CODE=… to require one on other devices.
+```
+
 | Variable | Default | Purpose |
 |---|---|---|
 | `PORT` | `4134` | HTTP port |
-| `HOST` | `127.0.0.1` | Bind address. Set `0.0.0.0` to reach it from other machines or a container. |
+| `HOST` | `0.0.0.0` | Bind address. `0.0.0.0` opens it to your network; `127.0.0.1` keeps it to this computer. |
+| `DD_ACCESS_CODE` | (unset) | Code other devices must enter once (remembered for 30 days). This computer never needs it. |
+| `DD_ALLOW_PUBLIC` | (unset) | `1` lets non-private (internet) addresses connect. Off by default; see below before turning it on. |
 | `DD_DATA_DIR` | `./data/projects` | Where projects are saved (one JSON file each) |
 | `ANTHROPIC_API_KEY` | (unset) | Enables the AI collaborator for everyone using this server |
 | `DD_MODEL` | `claude-opus-5-5` | Default Claude model |
 | `DD_AI_MOCK` | (unset) | `1` = canned AI responses for offline UI development and demos |
+
+## Using it on other devices
+
+1. Start the server on one computer (`npm start`, or `DD_ACCESS_CODE=pick-a-code npm start`).
+2. On the other device, open the **Your network** address. **Settings → Other devices** shows the same addresses with copy buttons.
+3. If it doesn't load, allow Node.js / port 4134 through that computer's firewall. Both devices must be on the same network. Guest Wi-Fi with client isolation blocks this.
+
+Every device works on the same projects:
+- **Live updates.** An idle device picks up changes saved elsewhere within about four seconds.
+- **No silent overwrites.** Each save carries the version it was based on. If another device saved first, the server refuses the stale save (HTTP 409) and the app asks what to keep: *Load the latest*, *Save mine as a copy*, or *Keep mine* (after a confirmation).
+- **Nothing lost on close or disconnect.** Edits are copied to the browser as you type and flushed when the tab is hidden or closed. If the server can't be reached, they're kept locally and restored the next time you open the project.
+
+Security defaults:
+- Only private-network addresses can connect: home and office LANs, 10.x, 172.16–31.x, 192.168.x, and VPN ranges such as Tailscale's 100.64/10. The check uses the connection's real address; `X-Forwarded-For` is ignored.
+- Without `DD_ACCESS_CODE`, anyone on your network can open your projects, and can use the server's `ANTHROPIC_API_KEY` if one is set. On shared networks, set an access code. The server prints a reminder when a key is set without one.
+- An API key typed into Settings stays in that one browser. Each device that should use AI needs its own key, or set `ANTHROPIC_API_KEY` on the server.
+- `DD_ALLOW_PUBLIC=1` exposes the app to anyone who can reach the port. Traffic is plain HTTP. If you need access from outside your network, use a VPN such as Tailscale instead, or put the app behind an HTTPS reverse proxy *and* set an access code.
 
 ## What's inside
 
@@ -64,8 +93,40 @@ Track (to others / to self / to audience) and mode (dramatized/narratized). One 
   - Clichés and character-neutral phrases; clutter; arid Latinate language; passive voice; long speeches and the monologue fallacy.
   - Blurred meaning, mistimed cues, accidental echoes, and words the character "never says".
   - At scene level: repetitious beats, nonevents and mistimed turning points, duelogues, characters who sound alike, and voice drift from the profile.
+- **Double-check** (below): independent checks that catch what a single pass misses.
+- **Table read**: the browser reads the scene aloud line by line, and you press <kbd>F</kbd> to flag a line that sounds wrong. The case studies advise reading scenes aloud, or better, acting them out (Ch. 13, 15). Where speech synthesis isn't available, it paces silently at reading speed.
 - **Six dialogue tasks scorecard**, plus a Sopranos-style **content · length · pace** table per speaker (Ch. 13).
 - **Script** export: Fountain screenplay, stage play, prose draft, or an annotated beat breakdown with subtext.
+
+### Double-check: limiting missed problems
+A single set of rules is precise but misses a lot. On the bundled test lines, the rules alone catch 40% of the planted flaws. So every line goes through independent checks, and the results are merged:
+
+| Layer | What it does | Needs |
+|---|---|---|
+| **Rules** | Precise patterns: on-the-nose statements, clichés, clutter, Latinate diction, long speeches… | nothing |
+| **Second reader** | A recall-oriented pass. It uses stemming, fuzzy phrase matching that tolerates filler words, and lexicons for emotion, exposition and abstraction. At scene level it also looks for repeated tactics and missing reactions. | nothing |
+| **AI review** | Claude reads the scene with the profiles and the analyzer's findings. It reports what the other checks missed and disputes their false alarms. | API key |
+| **Your ear** | Lines you flag during a table read | nothing |
+
+Each finding shows its sources and a status:
+- **Confirmed**: two or more checks agree.
+- **Flagged**: the rules alone.
+- **Verify**: one sensitive check alone, so look before acting.
+- **By ear**: you flagged it.
+
+The AI can mark a finding *disputed* with its reason. You can **dismiss** a finding as deliberate; it's remembered per line and can be shown again. AI results are fingerprinted per line: edit a line and its AI findings are marked stale until the next review. The double-check card shows each layer's coverage, and the story table counts lines still to verify.
+
+Measured on `test/fixtures/flawed-lines.js` (lines written for this purpose, so treat the numbers as optimistic):
+
+| Set | Rules alone | Rules + second reader |
+|---|---|---|
+| Tuning set, 42 flawed lines | 40% | 100% |
+| Held-out set, 24 flawed lines written after tuning | 38% | 100% |
+| Clean lines falsely flagged | 0 / 12 | 0 / 12 |
+
+The reliable signal is the gap, not the 100%: real scenes will have misses that no heuristic sees. That's why the AI review and the table read exist. "Verify" findings are not errors; they're cues to look again.
+
+![Double-check: a finding confirmed by two checks and disputed by the AI reviewer, and two "verify" findings from the second reader](docs/screenshots/double-check.png)
 
 ### Handbook
 A searchable, infographic condensation of the book's framework. It covers:
@@ -86,6 +147,7 @@ A searchable, infographic condensation of the book's framework. It covers:
   - **Doctor**: diagnoses the scene from the analyzer's findings, root causes first, and proposes rewrites.
   - **Beats**: proposes the next beats, each topping the last.
   - **Line lab**: five alternatives for a line, each a different tactic.
+  - **Review**: the AI layer of the double-check (run it from the workshop's double-check card).
 
 The AI never edits your work directly. It calls proposal tools, and you choose what to apply. Every AI-applied change can be undone.
 
@@ -110,17 +172,22 @@ The default model is Claude Opus 5.5; Settings offers Sonnet 5.5, Haiku 5.5 and 
 server.js               Express app: static UI, project REST API, AI SSE endpoint (port 4134)
 server/ai.js            Claude agent loop, tool validation, error mapping, mock mode
 server/prompts.js       System prompt (built from the knowledge base) and tool definitions
-server/storage.js       JSON file storage, one file per project
+server/storage.js       JSON file storage, one file per project, with revisions and per-project save locks
+server/network.js       LAN guard (private addresses only), optional access code, network addresses
 public/index.html       Single-page app shell (Preact + htm, no build step)
 public/css/app.css      Design tokens (light/dark), layout, components
 public/js/mckee.js      The knowledge base: principles, schema, interview, tactics, flaws, all with chapter refs
-public/js/analysis.js   Dialogue analysis engine (pure functions, shared with tests)
+public/js/analysis.js   Dialogue analysis engine: the rules layer (pure functions, shared with tests)
+public/js/secondreader.js  Second reader: the recall-oriented layer
+public/js/doublecheck.js   Merges rules, second reader, AI review and the writer's flags into statuses
+public/js/review.js     Runs the AI review and stores it with per-line fingerprints
+public/js/store.js      State, autosave with revisions, conflict handling, local backups, live updates
 public/js/model.js      Data model and factories
 public/js/sample.js     Original sample project ("What He Left")
 public/js/export.js     Fountain / stage / prose / annotated exporters
 public/js/components/   Shared UI and SVG infographics (value arc, radar, spheres, rings, web…)
 public/js/views/        Story, character, scene design, workshop, handbook, settings, assistant drawer
-test/                   node:test suites (analysis engine, REST API, AI loop against a fake Anthropic endpoint)
+test/                   node:test suites (analysis, double-check, REST API and conflicts, LAN guard, AI loops against a fake Anthropic endpoint)
 ```
 
 ## Tests
@@ -129,7 +196,12 @@ test/                   node:test suites (analysis engine, REST API, AI loop aga
 npm test
 ```
 
-The suites cover the analysis heuristics (one test per major flaw family), voice measurement, turning-point detection, the exporters, the sample project, the REST API, and the full AI tool-use loop. The loop runs offline against a local fake of the Messages API streaming endpoint.
+The suites cover:
+- the analysis heuristics (one test per major flaw family), voice measurement, turning-point detection, the exporters and the sample project;
+- the double-check: recall on the tuning and held-out sets, no false alarms on clean lines, statuses, disputes, dismissals and stale AI findings;
+- the REST API, including revision conflicts and concurrent saves;
+- the LAN guard and access code;
+- the AI tool-use loop, including the review report. The loop runs offline against a local fake of the Messages API streaming endpoint.
 
 ## About the source
 

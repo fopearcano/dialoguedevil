@@ -9,7 +9,7 @@ const SETTINGS_KEY = 'dd:settings';
 const listeners = new Set();
 
 function loadSettings() {
-  const defaults = { theme: 'system', apiKey: '', model: '', showSubtext: true, lastProjectId: '', drawerOpen: window.innerWidth >= 1240 };
+  const defaults = { theme: 'system', apiKey: '', model: '', showSubtext: true, showPossible: true, showDismissed: false, readDirections: false, lastProjectId: '', drawerOpen: window.innerWidth >= 1240 };
   try {
     return { ...defaults, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}') };
   } catch {
@@ -34,6 +34,7 @@ export const state = {
   ai: null,
   toast: null,
   drawer: { tab: '', request: null },
+  conflict: null, // { remote } when another device saved first
 };
 
 export function emit() {
@@ -95,22 +96,86 @@ export function toast(message, kind = 'info') {
 const undoStack = [];
 const redoStack = [];
 let lastEdit = 0;
+let dirty = false; // local changes the server has not confirmed yet
+let inflight = null; // the save request in progress
+let again = false; // edits arrived while a save was in flight
 
-const persist = debounce(async () => {
-  const p = state.project;
+const backupKey = (id) => `dd:backup:${id}`;
+
+// A crash-safe copy of the open project in this browser. `dirty` marks
+// changes the server has not confirmed; they are restored on the next open.
+function writeBackup(isDirty, p = state.project) {
   if (!p) return;
-  try { localStorage.setItem(`dd:backup:${p.id}`, JSON.stringify(p)); } catch { /* quota */ }
+  try { localStorage.setItem(backupKey(p.id), JSON.stringify({ dirty: isDirty, at: Date.now(), project: p })); } catch { /* quota or private mode */ }
+}
+const backupSoon = debounce(() => writeBackup(true), 250);
+
+function readBackup(id) {
+  try {
+    const b = JSON.parse(localStorage.getItem(backupKey(id)) || 'null');
+    return b && b.dirty && b.project ? normalizeProject(b.project) : null;
+  } catch {
+    return null;
+  }
+}
+
+function clearUndo() {
+  undoStack.length = 0;
+  redoStack.length = 0;
+  lastEdit = 0;
+}
+
+// One save at a time. The request carries the revision this browser started
+// from; if another device saved in between, the server answers 409 and the
+// writer chooses what to keep.
+async function save({ keepalive = false } = {}) {
+  const p = state.project;
+  if (!p || !dirty || state.conflict) return;
+  if (inflight) { again = true; return; }
+  dirty = false;
   state.saving = 'saving';
   emit();
-  try {
-    await api.saveProject(p);
-    state.saving = 'saved';
-  } catch (err) {
-    state.saving = 'error';
-    state.error = `Not saved to server: ${err.message}. A local backup is kept in this browser.`;
+  inflight = (async () => {
+    try {
+      const saved = await api.saveProject(p, { keepalive });
+      p.revision = saved.revision;
+      if (state.project === p) {
+        state.error = '';
+        state.saving = dirty ? 'pending' : 'saved';
+        if (!dirty) writeBackup(false);
+      }
+    } catch (err) {
+      if (state.project !== p) {
+        // The writer switched projects meanwhile: keep these edits for the
+        // next time that project is opened.
+        writeBackup(true, p);
+      } else {
+        dirty = true;
+        if (err.status === 409 && err.body?.current) {
+          state.conflict = { remote: normalizeProject(err.body.current) };
+          state.saving = 'conflict';
+        } else {
+          state.saving = 'error';
+          state.error = `Not saved to the server (${err.message}). Your changes are kept in this browser and will be retried.`;
+        }
+      }
+    }
+    emit();
+  })();
+  await inflight;
+  inflight = null;
+  if (again) {
+    again = false;
+    if (dirty) persist();
   }
-  emit();
-}, 700);
+}
+
+const persist = debounce(() => save(), 700);
+
+function flushNow(opts) {
+  persist.cancel();
+  return save(opts);
+}
 
 // Mutate the open project in place and schedule a save. Continuous edits
 // (typing) share one undo step until the writer pauses; `checkpoint` makes a
@@ -126,8 +191,10 @@ export function mutate(fn, { checkpoint = false } = {}) {
   }
   lastEdit = checkpoint ? 0 : now;
   fn(p);
-  state.saving = 'pending';
+  dirty = true;
+  if (!state.conflict) state.saving = 'pending';
   emit();
+  backupSoon();
   persist();
 }
 
@@ -138,9 +205,13 @@ export const canUndo = () => undoStack.length > 0;
 export const canRedo = () => redoStack.length > 0;
 
 function restore(json) {
+  const revision = state.project?.revision || 0;
   state.project = normalizeProject(JSON.parse(json));
+  state.project.revision = revision;
   lastEdit = 0;
+  dirty = true;
   emit();
+  backupSoon();
   persist();
 }
 
@@ -163,15 +234,93 @@ export async function refreshProjects() {
 }
 
 export async function openProject(id) {
-  persist.flush();
-  const p = await api.getProject(id);
-  state.project = normalizeProject(p);
-  lastEdit = 0;
-  undoStack.length = 0;
-  redoStack.length = 0;
-  state.saving = 'saved';
+  // Settle the outgoing project's backup now; a pending debounced write would
+  // otherwise land on the incoming one.
+  backupSoon.cancel();
+  if (dirty) writeBackup(true);
+  await flushNow();
+  const server = normalizeProject(await api.getProject(id));
+  const local = readBackup(id);
+  clearUndo();
+  state.conflict = null;
+  if (local && local.revision === server.revision) {
+    // Unsaved edits from this browser, made on top of the current version.
+    state.project = local;
+    dirty = true;
+    state.saving = 'pending';
+    toast('Restored unsaved changes from this browser');
+    persist();
+  } else if (local) {
+    // Unsaved edits here, and the project moved on elsewhere.
+    state.project = local;
+    dirty = true;
+    state.conflict = { remote: server };
+    state.saving = 'conflict';
+  } else {
+    state.project = server;
+    dirty = false;
+    state.saving = 'saved';
+  }
   setSetting('lastProjectId', id);
   emit();
+}
+
+// The writer's answer to a save conflict.
+export async function resolveConflict(choice) {
+  const c = state.conflict;
+  if (!c) return;
+  if (choice === 'theirs') {
+    state.project = c.remote;
+    state.conflict = null;
+    dirty = false;
+    clearUndo();
+    state.saving = 'saved';
+    writeBackup(false);
+    emit();
+    toast('Loaded the latest version');
+  } else if (choice === 'mine') {
+    state.project.revision = c.remote.revision;
+    state.conflict = null;
+    dirty = true;
+    emit();
+    await flushNow();
+    toast('Your version was saved over the other one');
+  } else if (choice === 'copy') {
+    const mine = JSON.parse(JSON.stringify(state.project));
+    try { localStorage.setItem(backupKey(c.remote.id), JSON.stringify({ dirty: false, at: Date.now(), project: c.remote })); } catch { /* ignore */ }
+    state.conflict = null;
+    dirty = false;
+    await createAndOpen({ project: { ...mine, title: `${mine.title} (my copy)` } });
+    toast('Your version was saved as a copy');
+  }
+}
+
+// Picks up changes saved by other devices while this one is idle.
+async function poll() {
+  const p = state.project;
+  if (!p || document.hidden || state.conflict || inflight) return;
+  if (dirty) {
+    if (state.saving === 'error') save();
+    return;
+  }
+  try {
+    const m = await api.projectMeta(p.id);
+    if (m.revision <= p.revision) return;
+    const fresh = normalizeProject(await api.getProject(p.id));
+    if (dirty || inflight || state.project !== p) return;
+    state.project = fresh;
+    clearUndo();
+    writeBackup(false);
+    emit();
+    toast('Updated with changes from another device');
+  } catch (err) {
+    if (err.status === 404 && state.project === p) {
+      toast('This project was deleted on another device', 'error');
+      const list = await refreshProjects();
+      if (list.length) await openProject(list[0].id);
+      else await createAndOpen({ sample: true });
+    }
+  }
 }
 
 export async function createAndOpen(body) {
@@ -203,6 +352,8 @@ export async function boot() {
   const id = list.some((p) => p.id === want) ? want : list[0]?.id;
   if (id) await openProject(id);
   else await createAndOpen({ sample: true });
+  setInterval(poll, 4000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) poll(); });
 }
 
 export function aiAvailable() {
@@ -217,4 +368,13 @@ export function openDrawer(tab, request = null) {
   else emit();
 }
 
-window.addEventListener('beforeunload', () => persist.flush());
+// Leaving or hiding the page: keep a local copy and send pending edits with
+// a keepalive request, so the last keystrokes are not lost.
+function flushOnHide() {
+  if (!state.project) return;
+  backupSoon.cancel();
+  writeBackup(dirty);
+  if (dirty) flushNow({ keepalive: true });
+}
+document.addEventListener('visibilitychange', () => { if (document.hidden) flushOnHide(); });
+window.addEventListener('pagehide', flushOnHide);

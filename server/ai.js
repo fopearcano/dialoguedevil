@@ -5,6 +5,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod';
 import { TOOLS, TOOL_ACK, MODES, buildSystem } from './prompts.js';
+import { REVIEWABLE_FLAWS } from '../public/js/mckee.js';
 
 export const MODELS = [
   { id: 'claude-opus-5-5', label: 'Claude Opus 5.5 (default)' },
@@ -39,7 +40,18 @@ const SCHEMAS = {
     options: z.array(z.object({ speaker_id: z.string(), text: z.string(), paren: opt, subtext: z.string(), tactic: z.string(), note: opt })).min(1),
   }),
   speak_in_character: z.object({ text: z.string().min(1), paralanguage: opt, subtext: z.string(), tactic: z.string() }),
+  report_issues: z.object({
+    summary: z.string().default(''),
+    issues: z.array(z.object({
+      line_id: z.string().default(''), flaw: z.enum(REVIEWABLE_FLAWS), severity: z.enum(['info', 'warning', 'serious']).default('warning'),
+      evidence: z.string().default(''), note: z.string(), fix: z.string().default(''),
+    })).default([]),
+    disputes: z.array(z.object({ line_id: z.string().default(''), flaw: z.enum(REVIEWABLE_FLAWS), reason: z.string() })).default([]),
+  }),
 };
+
+// Tools whose call is the whole answer: no follow-up turn is needed.
+const TERMINAL_TOOLS = new Set(['speak_in_character', 'report_issues']);
 
 export function aiStatus() {
   return {
@@ -125,21 +137,21 @@ export async function runChat({ body, apiKey, send, signal }) {
 
     history.push({ role: 'assistant', content: message.content });
     const results = [];
-    let onlySpeech = true;
+    let terminal = true;
     for (const tu of toolUses) {
       const schema = SCHEMAS[tu.name];
       const parsed = schema ? schema.safeParse(tu.input) : { success: false, error: new Error(`Unknown tool ${tu.name}`) };
       if (!parsed.success) {
         results.push({ type: 'tool_result', tool_use_id: tu.id, is_error: true, content: JSON.stringify({ INVALID_INPUT: String(parsed.error?.message || parsed.error).slice(0, 2000) }) });
-        onlySpeech = false;
+        terminal = false;
         continue;
       }
-      if (tu.name !== 'speak_in_character') onlySpeech = false;
+      if (!TERMINAL_TOOLS.has(tu.name)) terminal = false;
       send('proposal', { tool: tu.name, id: tu.id, input: parsed.data });
       results.push({ type: 'tool_result', tool_use_id: tu.id, content: TOOL_ACK[tu.name] });
     }
-    // In rehearsal the speech is the whole turn; no follow-up needed.
-    if (onlySpeech) break;
+    // A speech (rehearsal) or a review report is the whole turn.
+    if (terminal) break;
     history.push({ role: 'user', content: results });
   }
 }
@@ -177,6 +189,17 @@ async function mockChat({ mode, context, send, signal }) {
   const chars = context.data?.characters || [];
   if (mode === 'rehearse') {
     send('proposal', { tool: 'speak_in_character', id: 'mock_speech', input: { text: 'Balance staff. Broken since March.', paralanguage: 'not looking up from the loupe', subtext: 'I was here. You weren\'t.', tactic: 'exposing his ignorance' } });
+    return;
+  }
+  if (mode === 'review') {
+    const firstLine = (scene?.beats || []).flatMap((b) => b.lines || []).find((l) => l.kind !== 'action' && l.text);
+    const flagged = Object.entries(context.data?.analyzer?.lineFindings || {})[0];
+    await streamText('(Mock mode.) Reading every line against the analyzer…', send, signal);
+    send('proposal', { tool: 'report_issues', id: 'mock_review', input: {
+      summary: '(Mock) The scene turns; one line leans on a stock phrase.',
+      issues: firstLine ? [{ line_id: firstLine.id, flaw: 'cliche', severity: 'info', evidence: firstLine.text.slice(0, 30), note: '(Mock) A familiar turn of phrase.', fix: 'Find the version only this character would say.' }] : [],
+      disputes: flagged ? [{ line_id: flagged[0], flaw: String(flagged[1][0]).split(' ')[0], reason: '(Mock) Deliberate in context.' }] : [],
+    } });
     return;
   }
   if (mode === 'coach') {

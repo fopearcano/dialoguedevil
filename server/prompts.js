@@ -6,7 +6,7 @@ import {
   BOOK, DEFINITION, THREE_TRACKS, THREE_FUNCTIONS, SPHERES, CONFLICT_LEVELS, CONFLICT_RULE, SIX_TASKS,
   LINE_DESIGNS, TECHNIQUES, DESIRE_COMPLEX, FIVE_STEPS, BEAT_DEFINITION, CONTEXT_CULTURE, CONFLICT_TYPES,
   FLAWS, WORD_CHOICE_OBSERVATIONS, CHARACTER_SPECIFIC, KEY_QUESTIONS, MASTERING, MEDIA, CHARACTER_SECTIONS,
-  VOICE_DIMENSIONS, VOICE_EXERCISES, shortCite,
+  VOICE_DIMENSIONS, VOICE_EXERCISES, REVIEWABLE_FLAWS, shortCite,
 } from '../public/js/mckee.js';
 
 const bullet = (items) => items.map((x) => `- ${x}`).join('\n');
@@ -98,6 +98,18 @@ Diagnose it with the flaws-and-fixes framework and the analyzer findings supplie
     effort: 'medium',
     instructions: () => `Mode: BEAT PARTNER for the active scene.
 Propose the next one to three beats, using propose_beats. Each beat must top the previous one and move the scene toward or around its turning point. Name the action and reaction as gerunds and give the lines with subtext and tactic. Write each character in their own voice. Explain your thinking in one or two sentences before the proposal.`,
+  },
+  review: {
+    label: 'AI double-check',
+    effort: 'high',
+    instructions: () => `Mode: DOUBLE-CHECK REVIEW of the active scene.
+You are one independent reader in a double-check system. The analyzer's rules and a second, more sensitive reader have already flagged lines; their findings are in analyzer.lineFindings (by line id, with which checks found each) and analyzer.sceneFindings. Your job is to limit both misses and false alarms:
+1. Read every line in context: the beats, each speaker's scene intention and subtext, and the speaker's voice profile.
+2. Report problems the analyzer missed. Also report serious problems it caught, since independent agreement raises confidence. Quote the exact words as evidence and give one concrete fix.
+3. Dispute analyzer findings that are false alarms in context, with the reason (for example a cliché this character would genuinely use, or small talk that is itself the tactic).
+4. Respect each character's voice profile (a Latinate character is not "arid"). Skip matters of mere taste, and do not re-report flaws the writer dismissed (analyzer.dismissed).
+Use only these flaw ids: ${REVIEWABLE_FLAWS.map((id) => `${id} = ${FLAWS[id].name}`).join('; ')}.
+Call report_issues exactly once with summary, issues and disputes. Use line_id "" for scene-level issues. No other output.`,
   },
   alternatives: {
     label: 'Line lab',
@@ -199,6 +211,44 @@ export const TOOLS = [
     },
   },
   {
+    name: 'report_issues',
+    description: 'Review mode only: report the problems found in the scene, and dispute analyzer findings judged to be false alarms. Call once with everything.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        summary: { type: 'string', description: 'Two or three sentences: the root cause, if there is one.' },
+        issues: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              line_id: { type: 'string', description: 'Line id from the context, or "" for a scene-level issue.' },
+              flaw: { type: 'string', enum: REVIEWABLE_FLAWS },
+              severity: { type: 'string', enum: ['info', 'warning', 'serious'] },
+              evidence: { type: 'string', description: 'The exact words that show the problem.' },
+              note: { type: 'string', description: 'One sentence: what is wrong here.' },
+              fix: { type: 'string', description: 'One concrete fix.' },
+            },
+            required: ['line_id', 'flaw', 'severity', 'note'],
+          },
+        },
+        disputes: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              line_id: { type: 'string', description: 'Line id, or "" for a scene-level finding.' },
+              flaw: { type: 'string', enum: REVIEWABLE_FLAWS },
+              reason: { type: 'string', description: 'Why it is a false alarm in context.' },
+            },
+            required: ['line_id', 'flaw', 'reason'],
+          },
+        },
+      },
+      required: ['summary', 'issues', 'disputes'],
+    },
+  },
+  {
     name: 'speak_in_character',
     description: 'Rehearsal mode only: deliver the character\'s next speech, with its subtext and the action taken.',
     input_schema: {
@@ -219,6 +269,7 @@ export const TOOL_ACK = {
   propose_beats: 'Shown to the writer as a beat proposal. They will apply or dismiss it.',
   propose_lines: 'Shown to the writer as line options. They will choose one or none.',
   speak_in_character: 'Delivered.',
+  report_issues: 'Report received.',
 };
 
 export function buildSystem(mode, context) {

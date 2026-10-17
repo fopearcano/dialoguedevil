@@ -3,8 +3,9 @@ import { state, mutate, act, navigate, aiAvailable, setSetting } from '../store.
 import { Tabs, Cite, CharSelect, TextArea, Icon, Meter, CharDot } from '../components/ui.js';
 import { INTERVIEW, CHARACTER_SECTIONS, VOICE_DIMENSIONS, VOICE_EXERCISES, MODALITIES, cite } from '../mckee.js';
 import { getPath, setPath, uid, characterById, sceneById, newBeat, newLine, locateLine } from '../model.js';
-import { analyzeScene } from '../analysis.js';
+import { doubleCheckScene } from '../doublecheck.js';
 import { streamChat } from '../api.js';
+import { briefChar, fullChar, sceneForAI, projectMeta, analyzerSummary } from '../aicontext.js';
 
 const TAB_DEFS = {
   interview: { label: 'Interview', ai: false },
@@ -119,36 +120,6 @@ function Interview() {
 // AI panel (optional): coach, rehearse, doctor, beats, line lab.
 // ---------------------------------------------------------------------------
 
-function briefChar(c) {
-  return c ? { id: c.id, name: c.name, role: c.role, logline: c.logline } : null;
-}
-
-function fullChar(c) {
-  if (!c) return null;
-  const { notes, ...rest } = c;
-  return rest;
-}
-
-function sceneForAI(s, p) {
-  if (!s) return null;
-  const name = (id) => characterById(p, id)?.name || '';
-  return {
-    id: s.id, title: s.title, heading: s.heading, description: s.description, medium: s.medium || p.medium,
-    track: s.track, mode: s.mode, conflictType: s.conflictType, thirdThing: s.thirdThing,
-    participants: s.participants.map((x) => ({ ...x, name: name(x.characterId) })),
-    driver: name(s.driver), values: s.values, exposition: s.exposition, turningPoint: s.turningPoint,
-    beats: s.beats.map((b, i) => ({
-      beat: i + 1, actor_id: b.actor, actor: name(b.actor), action: b.action, reactor_id: b.reactor, reactor: name(b.reactor), reaction: b.reaction,
-      charges: b.charges, intensity: b.intensity,
-      lines: b.lines.map((l) => ({ id: l.id, kind: l.kind, speaker_id: l.speaker, speaker: name(l.speaker), text: l.text, paren: l.paren, subtext: l.subtext, tactic: l.tactic })),
-    })),
-  };
-}
-
-function projectMeta(p) {
-  return { title: p.title, logline: p.logline, medium: p.medium, genre: p.genre, vision: p.genreMode, coreValue: p.coreValue, incitingIncident: p.incitingIncident, mdq: p.mdq };
-}
-
 function chatKey(mode, ctx) {
   if (mode === 'coach') return `coach:${ctx.character?.id || ''}`;
   if (mode === 'rehearse') return `rehearse:${ctx.scene?.id || 'free'}:${ctx.character?.id || ''}`;
@@ -229,14 +200,7 @@ function AiPanel({ mode }) {
     } else {
       data.scene = sceneForAI(scene, p);
       data.characters = (scene?.participants || []).map((x) => fullChar(characterById(p, x.characterId))).filter(Boolean);
-      if (mode === 'doctor' && scene) {
-        const a = analyzeScene(scene, p);
-        data.analyzer = {
-          sceneFindings: a.scene.map((f) => `${f.severity}: ${f.name}: ${f.message}`),
-          lineFindings: Object.fromEntries(Object.entries(a.lines).map(([id, fs]) => [id, fs.filter((f) => f.severity !== 'good' && f.flaw !== 'noSubtext').map((f) => f.name)]).filter(([, v]) => v.length)),
-          sixTasks: a.tasks, turningPoint: a.turningPoint,
-        };
-      }
+      if (mode === 'doctor' && scene) data.analyzer = analyzerSummary(doubleCheckScene(scene, p), scene);
     }
     return { meta, data };
   }

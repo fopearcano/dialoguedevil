@@ -2,7 +2,8 @@ import { html, useState, useMemo, cx, charColor } from '../lib.js';
 import { state, mutate, navigate } from '../store.js';
 import { Card, Field, TextInput, TextArea, Select, Cite, CharDot, Meter, Icon } from '../components/ui.js';
 import { Radar, Sparkline, HeatMatrix } from '../components/viz.js';
-import { analyzeScene, profileCompleteness, voiceDistance, valueArc } from '../analysis.js';
+import { profileCompleteness, voiceDistance, valueArc } from '../analysis.js';
+import { doubleCheckScene } from '../doublecheck.js';
 import {
   MEDIA, STORY_VALUES, VOICE_DIMENSIONS, CHARACTER_SECTIONS, CONFLICT_LEVELS, CONFLICT_RULE, CONFLICT_TYPES, AXIOMS,
 } from '../mckee.js';
@@ -12,7 +13,7 @@ const set = (key) => (v) => mutate((p) => { p[key] = v; });
 
 export function StoryView() {
   const p = state.project;
-  const analyses = useMemo(() => Object.fromEntries(p.scenes.map((s) => [s.id, analyzeScene(s, p)])), [state.version]);
+  const analyses = useMemo(() => Object.fromEntries(p.scenes.map((s) => [s.id, doubleCheckScene(s, p)])), [state.version]);
   const totals = p.scenes.reduce((a, s) => ({ beats: a.beats + s.beats.length, lines: a.lines + s.beats.reduce((n, b) => n + b.lines.filter((l) => l.kind !== 'action').length, 0) }), { beats: 0, lines: 0 });
   const depthAvg = p.characters.length ? Math.round(p.characters.reduce((a, c) => a + profileCompleteness(c, CHARACTER_SECTIONS).overall, 0) / p.characters.length) : 0;
   const axiom = AXIOMS[new Date().getDate() % AXIOMS.length];
@@ -121,7 +122,7 @@ export function StoryView() {
             <td class="num">${a.totalLines}</td>
             <td class="small">${a.turningPoint && Math.abs(a.turningPoint.change) >= 2 ? `B${a.turningPoint.beatIndex + 1} · ${a.turningPoint.open > 0 ? '+' : ''}${a.turningPoint.open}→${a.turningPoint.close > 0 ? '+' : ''}${a.turningPoint.close}` : html`<span class="muted">none yet</span>`}</td>
             <td><${Meter} value=${health} /></td>
-            <td class="num">${a.flaggedLines}</td>
+            <td class="num" title="Lines with confirmed or flagged problems; “?” lines are only to verify">${a.stats.linesWithIssues}${a.stats.linesToVerify ? html` <span class="muted small">+${a.stats.linesToVerify}?</span>` : ''}</td>
           </tr>`;
         })}</tbody>
       </table>` : html`<div class="empty">No scenes yet. <button type="button" class="link-btn" onClick=${() => addScene()}>Design the first scene.</button></div>`}

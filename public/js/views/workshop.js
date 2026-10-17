@@ -1,19 +1,30 @@
 import { html, useState, useMemo, useRef, useEffect, cx, charColor } from '../lib.js';
-import { state, mutate, act, setSetting, openDrawer, aiAvailable } from '../store.js';
+import { state, mutate, act, setSetting, openDrawer, aiAvailable, toast } from '../store.js';
 import {
   Card, TextArea, Cite, CharSelect, CharChip, Icon, GerundInput, FindingBadge, FindingList, Meter,
 } from '../components/ui.js';
 import { SceneArc, TaskBars } from '../components/viz.js';
-import { analyzeScene, analyzeLine } from '../analysis.js';
+import { analyzeLine } from '../analysis.js';
+import { secondReadLine } from '../secondreader.js';
+import { doubleCheckScene, mergeFindings } from '../doublecheck.js';
+import { runAiReview } from '../review.js';
 import { SIX_TASKS, FIVE_STEPS, CONFLICT_TYPES, BEAT_DEFINITION, FLAWS } from '../mckee.js';
-import { newBeat, newLine, characterById } from '../model.js';
+import { newBeat, newLine, characterById, locateLine } from '../model.js';
 
 export function WorkshopView({ scene: s }) {
   const p = state.project;
-  const analysis = useMemo(() => analyzeScene(s, p), [state.version]);
+  const analysis = useMemo(() => doubleCheckScene(s, p), [state.version]);
   const [primaryId, setPrimaryId] = useState(s.values[0]?.id);
   const [focusFlaw, setFocusFlaw] = useState('');
-  const showSubtext = state.settings.showSubtext;
+  const reader = useTableRead(s);
+  const view = {
+    showSubtext: state.settings.showSubtext,
+    showPossible: state.settings.showPossible,
+    showDismissed: state.settings.showDismissed,
+    focusFlaw,
+    speakingId: reader.cur?.lineId,
+    readFrom: reader.start,
+  };
   const tpIndex = analysis.turningPoint && Math.abs(analysis.turningPoint.change) >= 2 ? analysis.turningPoint.beatIndex : null;
   const arcPrimary = primaryId && s.values.some((v) => v.id === primaryId) ? primaryId : s.values[0]?.id;
   return html`<div class="tab-body workshop">
@@ -23,28 +34,125 @@ export function WorkshopView({ scene: s }) {
     <div class="workshop-grid">
       <div class="workshop-main">
         <div class="workshop-toolbar">
-          <label class="toggle"><input type="checkbox" checked=${showSubtext} onChange=${(e) => setSetting('showSubtext', e.currentTarget.checked)} /> <${Icon} name="layers" /> Show subtext (iceberg view)</label>
+          <label class="toggle"><input type="checkbox" checked=${view.showSubtext} onChange=${(e) => setSetting('showSubtext', e.currentTarget.checked)} /> <${Icon} name="layers" /> Show subtext (iceberg view)</label>
+          <button type="button" class="btn btn-quiet btn-small" onClick=${() => (reader.cur ? reader.stop() : reader.start())} disabled=${!analysis.totalLines}>
+            <${Icon} name=${reader.cur ? 'stop' : 'play'} /> ${reader.cur ? 'Stop table read' : 'Table read'}
+          </button>
           ${focusFlaw ? html`<button type="button" class="chip-btn" onClick=${() => setFocusFlaw('')}>Highlighting: ${FLAWS[focusFlaw]?.name || focusFlaw} ×</button>` : ''}
           <span class="grow"></span>
           <span class="muted small" title=${BEAT_DEFINITION.text}>A beat = action / reaction <${Cite} ch=${[9, 12]} /></span>
         </div>
-        ${s.beats.length ? s.beats.map((b, i) => html`<${BeatCard} key=${b.id} s=${s} beat=${b} index=${i} analysis=${analysis} showSubtext=${showSubtext} turning=${tpIndex === i} focusFlaw=${focusFlaw} />`)
+        ${s.beats.length ? s.beats.map((b, i) => html`<${BeatCard} key=${b.id} s=${s} beat=${b} index=${i} analysis=${analysis} view=${view} turning=${tpIndex === i} />`)
           : html`<div class="empty card">
             <div class="empty-title">No beats yet.</div>
             <p class="muted">Before writing a line, ask: what does each character want out of this situation? What action would she take, right now, to get it? Only then: what exact words? <${Cite} ch=${2} /></p>
           </div>`}
+        ${reader.cur ? html`<${ReadingBar} s=${s} reader=${reader} />` : ''}
         <${Composer} s=${s} />
       </div>
       <aside class="workshop-side">
-        <${Diagnostics} s=${s} analysis=${analysis} focusFlaw=${focusFlaw} setFocusFlaw=${setFocusFlaw} />
+        <${Diagnostics} s=${s} analysis=${analysis} focusFlaw=${focusFlaw} setFocusFlaw=${setFocusFlaw} reader=${reader} />
       </aside>
     </div>
   </div>`;
 }
 
 // ---------------------------------------------------------------------------
+// Table read (Ch. 9: "act your dialogue aloud or hear it acted to you").
+// Speech synthesis with a voice per character; without voices, a silent
+// read paced at 2.5 words per second (Ch. 8). Press F to flag a line by ear.
+// ---------------------------------------------------------------------------
 
-function BeatCard({ s, beat: b, index, analysis, showSubtext, turning, focusFlaw }) {
+function useTableRead(scene) {
+  const [cur, setCur] = useState(null);
+  const ctl = useRef({ cancelled: true, timer: null });
+  const stop = () => {
+    ctl.current.cancelled = true;
+    clearTimeout(ctl.current.timer);
+    try { window.speechSynthesis?.cancel(); } catch { /* unsupported */ }
+    setCur(null);
+  };
+  useEffect(() => {
+    try { window.speechSynthesis?.getVoices(); } catch { /* warm the voice list */ }
+    return stop;
+  }, []);
+  useEffect(() => {
+    if (!cur) return undefined;
+    const onKey = (e) => {
+      const tag = (e.target.tagName || '').toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+      if (e.key === 'f' || e.key === 'F') { e.preventDefault(); toggleFlag(scene.id, cur.lineId); }
+      if (e.key === 'Escape') stop();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [cur?.lineId]);
+
+  const start = (fromLineId) => {
+    stop();
+    const p = state.project;
+    const queue = scene.beats.flatMap((b) => b.lines).filter((l) => String(l.text || '').trim());
+    if (!queue.length) return;
+    let i = Math.max(0, queue.findIndex((l) => l.id === fromLineId));
+    const synth = window.speechSynthesis;
+    let voices = [];
+    try { voices = synth?.getVoices() || []; } catch { voices = []; }
+    const silent = !synth || typeof window.SpeechSynthesisUtterance === 'undefined' || !voices.length;
+    const english = voices.filter((v) => /^en/i.test(v.lang));
+    const pool = english.length ? english : voices;
+    const run = { cancelled: false, timer: null };
+    ctl.current = run;
+    const step = () => {
+      if (run.cancelled) return;
+      if (i >= queue.length) { run.cancelled = true; setCur(null); toast('Table read finished'); return; }
+      const l = queue[i];
+      const c = characterById(p, l.speaker);
+      setCur({ index: i, total: queue.length, lineId: l.id, silent, name: l.kind === 'action' ? 'Action' : c?.name || '—', text: l.text });
+      document.getElementById(`line-${l.id}`)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      const n = l.text.split(/\s+/).length;
+      const next = () => { if (run.cancelled) return; i++; step(); };
+      if (l.kind === 'action' && !state.settings.readDirections) { run.timer = setTimeout(next, 900 + n * 120); return; }
+      if (silent) { run.timer = setTimeout(next, Math.max(900, (n / 2.5) * 1000)); return; }
+      const u = new window.SpeechSynthesisUtterance(l.text);
+      const slot = Math.max(0, c?.slot ?? 0);
+      if (pool.length) u.voice = l.kind === 'action' ? pool[pool.length - 1] : pool[(slot * 3) % pool.length];
+      u.rate = 0.85 + ((c?.voice?.sliders?.pace ?? 50) / 100) * 0.4;
+      u.pitch = [1, 0.85, 1.15, 0.95, 1.1, 0.9, 1.05, 0.8][slot % 8];
+      let done = false;
+      const finish = () => { if (done) return; done = true; clearTimeout(run.timer); run.timer = setTimeout(next, 250); };
+      u.onend = finish;
+      u.onerror = finish;
+      run.timer = setTimeout(finish, (n / 1.2 + 4) * 1000);
+      synth.speak(u);
+    };
+    step();
+  };
+  return { cur, start, stop };
+}
+
+function toggleFlag(sceneId, lineId) {
+  act((proj) => {
+    const s = proj.scenes.find((x) => x.id === sceneId);
+    const loc = s && locateLine(s, lineId);
+    if (loc && loc.line.kind !== 'action') loc.line.marked = !loc.line.marked;
+  });
+}
+
+function ReadingBar({ s, reader }) {
+  const c = reader.cur;
+  const line = locateLine(s, c.lineId)?.line;
+  return html`<div class="reading-bar card" role="status">
+    <span class="reading-pos">${c.index + 1}/${c.total}</span>
+    <div class="grow reading-text"><strong>${c.name.toUpperCase()}</strong> <span class="script">${c.text}</span>
+      ${c.silent ? html`<div class="small muted">No speech voices in this browser: reading silently at 2.5 words per second, the pace of talk <${Cite} ch=${8} />.</div>` : ''}</div>
+    ${line && line.kind !== 'action' ? html`<button type="button" class=${cx('btn btn-small', line.marked && 'btn-quiet active')} onClick=${() => toggleFlag(s.id, c.lineId)} title="Flag this line by ear (F)"><${Icon} name="flag" /> ${line.marked ? 'Flagged' : 'Flag (F)'}</button>` : ''}
+    <button type="button" class="btn btn-small btn-quiet" onClick=${reader.stop}><${Icon} name="stop" /> Stop</button>
+  </div>`;
+}
+
+// ---------------------------------------------------------------------------
+
+function BeatCard({ s, beat: b, index, analysis, view, turning }) {
   const p = state.project;
   const move = (dir) => act(() => {
     const j = index + dir;
@@ -97,7 +205,7 @@ function BeatCard({ s, beat: b, index, analysis, showSubtext, turning, focusFlaw
       </label>
     </div>
     <div class="lines">
-      ${b.lines.map((l, li) => html`<${LineRow} key=${l.id} s=${s} beat=${b} line=${l} index=${li} findings=${analysis.lines[l.id] || []} showSubtext=${showSubtext} focusFlaw=${focusFlaw} />`)}
+      ${b.lines.map((l, li) => html`<${LineRow} key=${l.id} s=${s} beat=${b} line=${l} index=${li} findings=${analysis.lines[l.id] || []} view=${view} />`)}
       ${!b.lines.length ? html`<p class="muted small beat-empty">No lines yet. Use the composer below; lines are added to the last beat.</p>` : ''}
     </div>
   </section>`;
@@ -105,7 +213,8 @@ function BeatCard({ s, beat: b, index, analysis, showSubtext, turning, focusFlaw
 
 // ---------------------------------------------------------------------------
 
-function LineRow({ s, beat: b, line: l, index, findings, showSubtext, focusFlaw }) {
+function LineRow({ s, beat: b, line: l, index, findings, view }) {
+  const { showSubtext, focusFlaw } = view;
   const p = state.project;
   const [alts, setAlts] = useState(false);
   const [draft, setDraft] = useState('');
@@ -117,10 +226,18 @@ function LineRow({ s, beat: b, line: l, index, findings, showSubtext, focusFlaw 
     [b.lines[index], b.lines[j]] = [b.lines[j], b.lines[index]];
   });
   const remove = () => act(() => { b.lines.splice(index, 1); });
-  const visible = findings.filter((f) => f.flaw !== 'noSubtext' || (!l.subtext && !l.tactic));
-  const dim = focusFlaw && !findings.some((f) => f.flaw === focusFlaw);
+  const visible = findings.filter((f) => {
+    if (f.flaw === 'noSubtext' && (l.subtext || l.tactic)) return false;
+    if (f.dismissed && !view.showDismissed) return false;
+    if (f.status === 'possible' && !view.showPossible) return false;
+    return true;
+  });
+  const dismiss = (flaw) => act(() => { if (!l.dismissed.includes(flaw)) l.dismissed.push(flaw); });
+  const restore = (flaw) => act(() => { l.dismissed = l.dismissed.filter((x) => x !== flaw); });
+  const dim = focusFlaw && !findings.some((f) => f.flaw === focusFlaw && !f.dismissed);
+  const speaking = view.speakingId === l.id;
   if (l.kind === 'action') {
-    return html`<div class=${cx('line action-line', dim && 'dim')}>
+    return html`<div class=${cx('line action-line', dim && 'dim', speaking && 'speaking')} id=${`line-${l.id}`}>
       <span class="action-tag">action</span>
       <${TextArea} value=${l.text} onInput=${set('text')} placeholder="Stage direction, paralanguage, silence…" class="action-text" rows=${1} />
       <div class="line-tools">
@@ -130,7 +247,7 @@ function LineRow({ s, beat: b, line: l, index, findings, showSubtext, focusFlaw 
       </div>
     </div>`;
   }
-  return html`<div class=${cx('line', dim && 'dim')} style=${`--c:${charColor(c)}`} id=${`line-${l.id}`}>
+  return html`<div class=${cx('line', dim && 'dim', speaking && 'speaking', l.marked && 'marked')} style=${`--c:${charColor(c)}`} id=${`line-${l.id}`}>
     <div class="line-gutter"></div>
     <div class="line-main">
       <div class="line-head">
@@ -141,6 +258,8 @@ function LineRow({ s, beat: b, line: l, index, findings, showSubtext, focusFlaw 
           <button type="button" class=${cx('icon-btn', alts && 'active')} title="Alternatives: never settle for the first choice (Ch. 7)" aria-label="Alternatives" onClick=${() => setAlts(!alts)}><${Icon} name="swap" />${l.alternatives.length ? html`<span class="mini-count">${l.alternatives.length}</span>` : ''}</button>
           <button type="button" class="icon-btn" title=${aiAvailable() ? 'Line lab: five AI alternatives' : 'Line lab (AI, optional): enable in Settings'} aria-label="AI line lab" onClick=${() => openDrawer('lab', { mode: 'alternatives', lineId: l.id, sceneId: s.id })}><${Icon} name="spark" /></button>
           <button type="button" class=${cx('icon-btn', l.exposition && 'active')} title="Mark: this line carries exposition" aria-label="Toggle exposition" onClick=${() => set('exposition')(!l.exposition)}>i</button>
+          <button type="button" class=${cx('icon-btn', l.marked && 'active')} title="Flag for rewrite: your own ear is the last check (Ch. 9)" aria-label="Flag line" onClick=${() => toggleFlag(s.id, l.id)}><${Icon} name="flag" /></button>
+          <button type="button" class="icon-btn" title="Table read from here" aria-label="Read aloud from here" onClick=${() => view.readFrom(l.id)}><${Icon} name="play" /></button>
           <button type="button" class="icon-btn" aria-label="Move up" onClick=${() => move(-1)}><${Icon} name="up" /></button>
           <button type="button" class="icon-btn" aria-label="Move down" onClick=${() => move(1)}><${Icon} name="down" /></button>
           <button type="button" class="icon-btn" aria-label="Delete line" onClick=${remove}><${Icon} name="trash" /></button>
@@ -158,7 +277,7 @@ function LineRow({ s, beat: b, line: l, index, findings, showSubtext, focusFlaw 
           </label>
         </div>
       </div>` : ''}
-      ${visible.length ? html`<div class="line-flags">${visible.map((f) => html`<${FindingBadge} f=${f} />`)}</div>` : ''}
+      ${visible.length ? html`<div class="line-flags">${visible.map((f) => html`<${FindingBadge} f=${f} onDismiss=${dismiss} onRestore=${restore} onUnflag=${() => toggleFlag(s.id, l.id)} />`)}</div>` : ''}
       ${alts ? html`<div class="alts">
         <div class="alts-head"><strong>Alternatives</strong> <span class="muted small">Write every choice down, then keep the best <${Cite} ch=${[7, 9]} /></span></div>
         ${l.alternatives.map((a, ai) => html`<div class="alt-row">
@@ -197,7 +316,16 @@ function Composer({ s }) {
   const c = characterById(p, speaker);
   const pt = s.participants.find((x) => x.characterId === speaker);
   const other = characterById(p, parts.find((x) => x.characterId !== speaker)?.characterId);
-  const draftFindings = text.trim() ? analyzeLine({ text, tactic, subtext }, { character: c, medium: s.medium || p.medium, genreMode: p.genreMode }).filter((f) => f.flaw !== 'noSubtext') : [];
+  // Drafts get the same double-check as saved lines: rules + second reader.
+  const draftFindings = useMemo(() => {
+    if (!text.trim()) return [];
+    const draft = { text, tactic, subtext };
+    const ctx = { character: c, medium: s.medium || p.medium, genreMode: p.genreMode };
+    return mergeFindings([
+      ...analyzeLine(draft, ctx).map((f) => ({ f, source: 'rules' })),
+      ...secondReadLine(draft, ctx).map((f) => ({ f, source: 'reader' })),
+    ]).filter((f) => f.flaw !== 'noSubtext' && f.status !== 'good');
+  }, [text, tactic, subtext, speaker]);
 
   const ensureBeat = (proj) => {
     if (!s.beats.length) s.beats.push(newBeat(s, { actor: speaker, reactor: other?.id || '' }));
@@ -265,29 +393,42 @@ function Composer({ s }) {
 
 // ---------------------------------------------------------------------------
 
-function Diagnostics({ s, analysis, focusFlaw, setFocusFlaw }) {
+function Diagnostics({ s, analysis, focusFlaw, setFocusFlaw, reader }) {
   const p = state.project;
-  const counts = Object.entries(analysis.counts).filter(([k]) => FLAWS[k]).sort((a, b) => b[1] - a[1]);
+  const tally = {};
+  for (const fs of Object.values(analysis.lines)) {
+    for (const f of fs) {
+      if (f.status === 'good' || f.dismissed || !FLAWS[f.flaw]) continue;
+      if (f.status === 'possible' && !state.settings.showPossible) continue;
+      const t = (tally[f.flaw] ||= { n: 0, possible: 0 });
+      t.n++;
+      if (f.status === 'possible') t.possible++;
+    }
+  }
+  const counts = Object.entries(tally).sort((a, b) => b[1].n - a[1].n);
   const strengths = Object.values(analysis.lines).flat().filter((f) => f.severity === 'good').length;
+  const dismissScene = (flaw) => act(() => { if (!s.dismissed.includes(flaw)) s.dismissed.push(flaw); });
+  const restoreScene = (flaw) => act(() => { s.dismissed = s.dismissed.filter((x) => x !== flaw); });
   const jump = (flaw) => {
     setFocusFlaw(flaw === focusFlaw ? '' : flaw);
-    const id = Object.entries(analysis.lines).find(([, fs]) => fs.some((f) => f.flaw === flaw))?.[0];
+    const id = Object.entries(analysis.lines).find(([, fs]) => fs.some((f) => f.flaw === flaw && !f.dismissed))?.[0];
     if (id) document.getElementById(`line-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   };
   const ct = CONFLICT_TYPES.find((t) => t.id === s.conflictType);
   return html`
+    <${DoubleCheckCard} s=${s} analysis=${analysis} reader=${reader} />
     <${Card} title="Six dialogue tasks" ch="tasks" sub="Fine dialogue does all six at once.">
       <${TaskBars} tasks=${analysis.tasks} defs=${SIX_TASKS} />
       <p class="small muted">— means not measurable yet (e.g. no exposition planned, or fewer than ~25 words per speaker).</p>
     </${Card}>
     <${Card} title="Scene diagnosis" ch=${[9, 12]}>
-      <${FindingList} findings=${analysis.scene} empty="No scene-level problems detected." />
+      <${FindingList} findings=${analysis.scene.filter((f) => (state.settings.showDismissed || !f.dismissed) && (state.settings.showPossible || f.status !== 'possible'))} empty="No scene-level problems detected." onDismiss=${dismissScene} onRestore=${restoreScene} />
       ${s.turningPoint?.note ? html`<p class="small"><strong>Planned turn (${s.turningPoint.type}):</strong> ${s.turningPoint.note}</p>` : ''}
     </${Card}>
     <${Card} title="Line flags" ch=${[6, 7, 8, 9]} sub=${`${analysis.flaggedLines} of ${analysis.totalLines} lines carry a warning · ${strengths} strengths`}>
       ${counts.length ? html`<ul class="flag-counts">
-        ${counts.map(([k, n]) => html`<li><button type="button" class=${cx('flag-count', focusFlaw === k && 'active')} onClick=${() => jump(k)}>
-          <span>${FLAWS[k].name}</span><span class="muted small">${FLAWS[k].group}</span><strong class="num">${n}</strong>
+        ${counts.map(([k, t]) => html`<li><button type="button" class=${cx('flag-count', focusFlaw === k && 'active')} onClick=${() => jump(k)}>
+          <span>${FLAWS[k].name}</span><span class="muted small">${t.possible === t.n ? 'to verify' : t.possible ? `${t.possible} to verify` : FLAWS[k].group}</span><strong class="num">${t.n}</strong>
         </button></li>`)}
       </ul>` : html`<p class="muted small">No flags. Read it aloud anyway <${Cite} ch=${9} />.</p>`}
     </${Card}>
@@ -311,4 +452,75 @@ function Diagnostics({ s, analysis, focusFlaw, setFocusFlaw }) {
       <ul class="tips small">${ct.tips.map((t) => html`<li>${t}</li>`)}</ul>
     </${Card}>` : ''}
   `;
+}
+
+// ---------------------------------------------------------------------------
+// The double-check card: coverage of each layer and what they found.
+// ---------------------------------------------------------------------------
+
+function ago(iso) {
+  const m = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+  if (m < 1) return 'just now';
+  if (m < 60) return `${m} min ago`;
+  const h = Math.round(m / 60);
+  return h < 24 ? `${h} h ago` : new Date(iso).toLocaleDateString();
+}
+
+function DoubleCheckCard({ s, analysis, reader }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const abort = useRef(null);
+  useEffect(() => () => abort.current?.abort(), []);
+  const st = analysis.stats;
+  const ai = analysis.ai;
+  const n = analysis.totalLines;
+  const byEar = Object.values(analysis.lines).flat().filter((f) => f.status === 'writer').length;
+  const run = async () => {
+    setBusy(true);
+    setError('');
+    const ctrl = new AbortController();
+    abort.current = ctrl;
+    try {
+      const r = await runAiReview(s.id, { signal: ctrl.signal });
+      toast(`AI double-check: ${r.issues.length} issue${r.issues.length === 1 ? '' : 's'}, ${r.disputes.length} dispute${r.disputes.length === 1 ? '' : 's'}`);
+    } catch (err) {
+      if (err.name !== 'AbortError') setError(err.message);
+    }
+    setBusy(false);
+  };
+  const layer = (name, status, ok, extra = '') => html`<li class=${cx('layer', ok ? 'ok' : 'pending')}>
+    <span class="layer-mark" aria-hidden="true">${ok ? '✓' : '·'}</span><span class="layer-name">${name}</span><span class="layer-status">${status}</span>${extra}</li>`;
+  const chips = [
+    ['confirmed', 'Confirmed', 'two or more checks agree'],
+    ['flagged', 'Flagged', 'rules only'],
+    ['possible', 'To verify', 'one sensitive check only'],
+    ['writer', 'By ear', 'you flagged it'],
+    ['disputed', 'Disputed', 'AI review disagrees'],
+    ['dismissed', 'Dismissed', 'marked deliberate'],
+  ];
+  return html`<${Card} title="Double-check" ch=${[6, 7, 8, 9, 19]} sub="Independent checks catch what any one misses: precise rules, a sensitive second reader, an optional AI review, and your own ear.">
+    <ul class="layers">
+      ${layer('Rules', `${n}/${n} lines`, true)}
+      ${layer('Second reader', `${n}/${n} lines`, true)}
+      ${layer('AI review', ai ? `${ai.current.size}/${ai.total} current · ${ago(ai.at)}${ai.changed ? ` · ${ai.changed} changed since` : ''}` : aiAvailable() ? 'not run yet' : 'off (optional)', !!ai && ai.current.size === ai.total && ai.total > 0)}
+      ${layer('Your ear', reader.cur ? 'reading now…' : `${byEar} line${byEar === 1 ? '' : 's'} flagged`, byEar > 0)}
+    </ul>
+    <div class="dc-chips">
+      ${chips.map(([k, label, hint]) => html`<span class=${cx('dc-chip', `dc-${k}`, !st[k] && 'zero')} title=${hint}><strong>${st[k]}</strong> ${label}</span>`)}
+    </div>
+    ${ai?.summary ? html`<p class="small dc-summary"><strong>AI reviewer:</strong> ${ai.summary}</p>` : ''}
+    ${error ? html`<p class="small error-text">${error}</p>` : ''}
+    <div class="dc-actions">
+      <button type="button" class="btn btn-small" disabled=${busy || !n || !aiAvailable()} title=${aiAvailable() ? 'Ask the AI to find misses and dispute false alarms' : 'Optional: add an API key in Settings'} onClick=${run}>
+        <${Icon} name="check2" /> ${busy ? 'Reviewing…' : ai ? 'Re-run AI double-check' : 'Run AI double-check'}
+      </button>
+      ${busy ? html`<button type="button" class="btn btn-small btn-quiet" onClick=${() => abort.current?.abort()}>Cancel</button>` : ''}
+      <button type="button" class="btn btn-small btn-quiet" disabled=${!n} onClick=${() => (reader.cur ? reader.stop() : reader.start())}><${Icon} name=${reader.cur ? 'stop' : 'play'} /> ${reader.cur ? 'Stop' : 'Table read'}</button>
+    </div>
+    <div class="dc-toggles small">
+      <label class="toggle"><input type="checkbox" checked=${state.settings.showPossible} onChange=${(e) => setSetting('showPossible', e.currentTarget.checked)} /> Show “to verify”</label>
+      <label class="toggle"><input type="checkbox" checked=${state.settings.showDismissed} onChange=${(e) => setSetting('showDismissed', e.currentTarget.checked)} /> Show dismissed</label>
+      <label class="toggle"><input type="checkbox" checked=${state.settings.readDirections} onChange=${(e) => setSetting('readDirections', e.currentTarget.checked)} /> Read stage directions</label>
+    </div>
+  </${Card}>`;
 }

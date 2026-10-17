@@ -40,20 +40,48 @@ export function createStorage(dir) {
     }
   }
 
-  async function save(project) {
+  // Saves are serialized per project so a read-check-write can't interleave
+  // with another device's save.
+  const locks = new Map();
+  function withLock(id, fn) {
+    const prev = locks.get(id) || Promise.resolve();
+    const run = prev.then(fn);
+    // The queue's tail never rejects; the caller handles `run`'s outcome.
+    const tail = run.catch(() => {}).finally(() => { if (locks.get(id) === tail) locks.delete(id); });
+    locks.set(id, tail);
+    return run;
+  }
+
+  // Every save bumps `revision`. When `expectedRevision` is given and the
+  // stored project has moved on (another device saved), the save is refused
+  // with 409 and the current version, unless `force` is set.
+  async function save(project, { expectedRevision = null, force = false } = {}) {
     const p = normalizeProject(project);
-    p.updatedAt = new Date().toISOString();
     const target = file(p.id);
-    await fs.mkdir(dir, { recursive: true });
-    const tmp = `${target}.${process.pid}.tmp`;
-    await fs.writeFile(tmp, JSON.stringify(p, null, 2));
-    await fs.rename(tmp, target);
-    return p;
+    return withLock(p.id, async () => {
+      const current = await get(p.id);
+      const currentRev = current?.revision || 0;
+      if (current && expectedRevision != null && !force && currentRev !== Number(expectedRevision)) {
+        throw Object.assign(new Error('This project was changed on another device.'), { status: 409, current });
+      }
+      p.revision = currentRev + 1;
+      p.updatedAt = new Date().toISOString();
+      await fs.mkdir(dir, { recursive: true });
+      const tmp = `${target}.${process.pid}.${Date.now()}.tmp`;
+      await fs.writeFile(tmp, JSON.stringify(p, null, 2));
+      await fs.rename(tmp, target);
+      return p;
+    });
+  }
+
+  async function meta(id) {
+    const p = await get(id);
+    return p ? { id: p.id, revision: p.revision || 0, updatedAt: p.updatedAt } : null;
   }
 
   async function remove(id) {
     await fs.rm(file(id), { force: true });
   }
 
-  return { ensure, list, get, save, remove, validId: (id) => ID_RE.test(String(id)) };
+  return { ensure, list, get, save, meta, remove, validId: (id) => ID_RE.test(String(id)) };
 }

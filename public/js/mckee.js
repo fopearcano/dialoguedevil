@@ -346,7 +346,12 @@ export const FLAWS = {
   paraphrasing: { name: 'Paraphrasing trap', group: 'Design', ch: [9, 12], why: 'Rephrasing faulty lines over and over makes them more on-the-nose.', fix: 'Dialogue problems are story problems. Fix the event and character design, not the words.' },
   noSubtext: { name: 'Line without action', group: 'Content', ch: [3, 2], why: 'No line is finished until you have answered: in the subtext of this verbal activity, what action is the character in fact taking?', fix: 'Name the tactic as a gerund and write the subtext.' },
   sameVoice: { name: 'Characters sound alike', group: 'Language', ch: [10, 2], why: 'When you write off the top of your head, every character sounds the same.', fix: 'Draw each voice from its own knowledge (nouns and verbs), personality (modifiers and modals) and culture.' },
+  noReaction: { name: 'Missing reaction', group: 'Design', ch: [9, 12], why: 'A beat is an action and a reaction; here one side acts and nothing answers.', fix: 'Write the reaction: a line, a look, a silence, a physical act.' },
+  tableRead: { name: 'Flagged by ear', group: 'Writer', ch: [13, 15, 19], why: 'You flagged this line while hearing the scene read aloud.', fix: 'Act it out. Rewrite until it sounds like spontaneous talk, true to the character.' },
 };
+
+// Flaw ids the AI reviewer may report (writer-only flags excluded).
+export const REVIEWABLE_FLAWS = Object.keys(FLAWS).filter((k) => FLAWS[k].group !== 'Writer');
 
 // ---------------------------------------------------------------------------
 // Word choice tendencies (Ch. 7)

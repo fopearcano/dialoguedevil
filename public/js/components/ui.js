@@ -2,6 +2,7 @@
 
 import { html, useState, useRef, useLayoutEffect, useEffect, cx, charColor } from '../lib.js';
 import { cite, shortCite, ALL_TACTICS } from '../mckee.js';
+import { SOURCE_LABEL } from '../doublecheck.js';
 
 export function Cite({ ch }) {
   if (ch == null) return null;
@@ -112,33 +113,56 @@ export function SeverityIcon({ severity }) {
   </svg>`;
 }
 
-// A finding badge: icon + label (never color alone). Click to expand.
-export function FindingBadge({ f, compact }) {
+const STATUS_TAG = { confirmed: (f) => `${f.sources.length} checks`, possible: () => 'verify', writer: () => 'by ear' };
+
+// A finding badge: icon + label (never color alone). Merged findings from the
+// double-check also show their status and sources; click to expand.
+export function FindingBadge({ f, onDismiss, onRestore, onUnflag }) {
   const [open, setOpen] = useState(false);
-  return html`<span class=${cx('finding', `sev-${f.severity}`, open && 'open')}>
+  const tag = STATUS_TAG[f.status]?.(f);
+  const notes = f.notes || [{ message: f.message }];
+  return html`<span class=${cx('finding', `sev-${f.severity}`, f.status && `st-${f.status}`, open && 'open', f.dismissed && 'is-dismissed', f.disputed && 'is-disputed')}>
     <button type="button" class="finding-head" onClick=${() => setOpen(!open)} aria-expanded=${open} title=${f.message}>
       <${SeverityIcon} severity=${f.severity} />
-      <span>${f.name}</span>
+      <span>${f.status === 'possible' ? 'Possible: ' : ''}${f.name}</span>
+      ${tag ? html`<span class="fs-tag">${tag}</span>` : ''}
+      ${f.disputed ? html`<span class="fs-tag">disputed</span>` : ''}
+      ${f.dismissed ? html`<span class="fs-tag">dismissed</span>` : ''}
     </button>
     ${open ? html`<span class="finding-body">
-      <span>${f.message}</span>
+      ${f.sources ? html`<span class="finding-sources">Found by ${f.sources.map((x) => SOURCE_LABEL[x] || x).join(' · ')}${f.status === 'possible' ? ': one check only, so verify it' : f.status === 'confirmed' ? ': independent checks agree' : ''}</span>` : ''}
+      ${notes.map((n) => html`<span>${n.source && notes.length > 1 ? html`<strong>${SOURCE_LABEL[n.source] || n.source}:</strong> ` : ''}${n.message}${n.evidence ? html` <em>“${n.evidence}”</em>` : ''}</span>`)}
+      ${f.disputed ? html`<span class="finding-dispute"><strong>AI review disagrees:</strong> ${f.disputed}</span>` : ''}
       ${f.fix ? html`<span class="finding-fix"><strong>Fix:</strong> ${f.fix}</span>` : ''}
       ${f.ch ? html`<${Cite} ch=${f.ch} />` : ''}
+      ${f.status && f.status !== 'good' ? html`<span class="finding-actions">
+        ${f.status === 'writer' && onUnflag ? html`<button type="button" class="link-btn small" onClick=${onUnflag}>Unflag</button>` : ''}
+        ${f.status !== 'writer' && !f.dismissed && onDismiss ? html`<button type="button" class="link-btn small" onClick=${() => onDismiss(f.flaw)}>Dismiss as deliberate</button>` : ''}
+        ${f.dismissed && onRestore ? html`<button type="button" class="link-btn small" onClick=${() => onRestore(f.flaw)}>Restore</button>` : ''}
+      </span>` : ''}
     </span>` : ''}
   </span>`;
 }
 
-export function FindingList({ findings, empty = 'Nothing to flag.' }) {
+export function FindingList({ findings, empty = 'Nothing to flag.', onDismiss, onRestore }) {
   if (!findings?.length) return html`<p class="muted small">${empty}</p>`;
   return html`<ul class="finding-list">
-    ${findings.map((f) => html`<li class=${`sev-${f.severity}`}>
-      <${SeverityIcon} severity=${f.severity} />
-      <div>
-        <div class="finding-title">${f.name} ${f.ch ? html`<${Cite} ch=${f.ch} />` : ''}</div>
-        <div class="small">${f.message}</div>
-        ${f.fix ? html`<div class="small muted"><strong>Fix:</strong> ${f.fix}</div>` : ''}
-      </div>
-    </li>`)}
+    ${findings.map((f) => {
+      const tag = STATUS_TAG[f.status]?.(f);
+      return html`<li class=${cx(`sev-${f.severity}`, f.dismissed && 'is-dismissed')}>
+        <${SeverityIcon} severity=${f.severity} />
+        <div>
+          <div class="finding-title">${f.status === 'possible' ? 'Possible: ' : ''}${f.name} ${f.ch ? html`<${Cite} ch=${f.ch} />` : ''}
+            ${tag ? html`<span class="fs-tag">${tag}</span>` : ''}${f.disputed ? html`<span class="fs-tag">disputed</span>` : ''}${f.dismissed ? html`<span class="fs-tag">dismissed</span>` : ''}</div>
+          ${(f.notes || [{ message: f.message }]).map((n) => html`<div class="small">${n.source && (f.notes || []).length > 1 ? html`<strong>${SOURCE_LABEL[n.source]}:</strong> ` : ''}${n.message}</div>`)}
+          ${f.disputed ? html`<div class="small"><strong>AI review disagrees:</strong> ${f.disputed}</div>` : ''}
+          ${f.fix ? html`<div class="small muted"><strong>Fix:</strong> ${f.fix}</div>` : ''}
+          ${f.status && f.status !== 'good' && (onDismiss || onRestore) ? html`<div>${f.dismissed
+            ? html`<button type="button" class="link-btn small" onClick=${() => onRestore?.(f.flaw)}>Restore</button>`
+            : html`<button type="button" class="link-btn small" onClick=${() => onDismiss?.(f.flaw)}>Dismiss as deliberate</button>`}</div>` : ''}
+        </div>
+      </li>`;
+    })}
   </ul>`;
 }
 
@@ -229,6 +253,10 @@ export function Icon({ name, size = 16 }) {
     layers: 'M8 2L1.5 5.5 8 9l6.5-3.5zM1.5 8.5L8 12l6.5-3.5M1.5 11.5L8 15l6.5-3.5',
     swap: 'M3 5.5h9l-2.5-2.5M13 10.5H4l2.5 2.5',
     flame: 'M8 14.5c-2.8 0-4.5-1.9-4.5-4.3C3.5 6.8 7 5.5 7 1.5c2.6 1.5 5.5 4.6 5.5 8.6 0 2.5-1.8 4.4-4.5 4.4z',
+    flag: 'M3.5 14.5V2M3.5 2.5h8l-1.8 3 1.8 3h-8',
+    play: 'M5 3l8 5-8 5z',
+    stop: 'M4 4h8v8H4z',
+    check2: 'M1.5 8.5l2.5 2.5L9 5.5M7 10.5l.5.5L13 5.5',
   };
   return html`<svg class="icon" viewBox="0 0 16 16" width=${size} height=${size} aria-hidden="true"><path d=${paths[name] || ''} /></svg>`;
 }
