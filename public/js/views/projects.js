@@ -7,7 +7,7 @@ import { mediumName } from '../mckee.js';
 export function ProjectsModal({ open, onClose }) {
   const [title, setTitle] = useState('');
   useEffect(() => { if (open) refreshProjects(); }, [open]);
-  const pick = async (id) => { await openProject(id); navigate('story'); onClose(); };
+  const pick = async (id) => { await openProject(id); navigate('write'); onClose(); };
   return html`<${Modal} open=${open} title=${tr('Projects')} onClose=${onClose}>
     <ul class="project-list">
       ${state.projects.map((p) => html`<li>

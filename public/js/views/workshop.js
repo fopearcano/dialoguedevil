@@ -68,7 +68,7 @@ export function WorkshopView({ scene: s }) {
 // Press F to flag a line by ear.
 // ---------------------------------------------------------------------------
 
-function useTableRead(scene) {
+export function useTableRead(scene) {
   const [cur, setCur] = useState(null);
   const ctl = useRef({ cancelled: true, timer: null });
   const stop = () => {
@@ -139,7 +139,7 @@ function useTableRead(scene) {
   return { cur, start, stop };
 }
 
-function toggleFlag(sceneId, lineId) {
+export function toggleFlag(sceneId, lineId) {
   act((proj) => {
     const s = proj.scenes.find((x) => x.id === sceneId);
     const loc = s && locateLine(s, lineId);
@@ -147,7 +147,7 @@ function toggleFlag(sceneId, lineId) {
   });
 }
 
-function ReadingBar({ s, reader }) {
+export function ReadingBar({ s, reader }) {
   const c = reader.cur;
   const line = locateLine(s, c.lineId)?.line;
   return html`<div class="reading-bar card" role="status">

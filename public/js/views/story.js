@@ -119,8 +119,8 @@ export function StoryView() {
           const ct = CONFLICT_TYPES.find((t) => t.id === s.conflictType);
           const taskVals = Object.values(a.tasks).filter((v) => v != null);
           const health = taskVals.length && a.totalLines ? Math.round(taskVals.reduce((x, y) => x + y, 0) / taskVals.length) : null;
-          return html`<tr onClick=${() => navigate(`scene/${s.id}/${s.beats.length ? 'workshop' : 'design'}`)} class="clickable">
-            <td><a href=${`#/scene/${s.id}/${s.beats.length ? 'workshop' : 'design'}`} class="strong">${s.title}</a><div class="muted small">${s.heading}</div></td>
+          return html`<tr onClick=${() => navigate(`write/${s.id}`)} class="clickable">
+            <td><a href=${`#/write/${s.id}`} class="strong">${s.title}</a><div class="muted small">${s.heading}</div></td>
             <td class="small">${ct ? shortType(ct.name) : '—'}</td>
             <td>${s.participants.map((pt) => { const c = p.characters.find((x) => x.id === pt.characterId); return c ? html`<${CharDot} character=${c} />` : ''; })}</td>
             <td>${arc ? html`<${Sparkline} points=${arc.points} />` : html`<span class="muted small">${tr('no value')}</span>`}</td>

@@ -15,14 +15,17 @@ export function addCharacter(name) {
   return id;
 }
 
+// A new scene opens on the writing desk with an empty cast: the writer picks
+// who is in it (or types a new name) before the first line.
 export function addScene(title) {
   let id;
   mutate((p) => {
     const s = newScene(p, title || tr('Scene {n}', { n: p.scenes.length + 1 }));
+    s.participants = [];
     id = s.id;
     p.scenes.push(s);
   });
-  navigate(`scene/${id}/design`);
+  navigate(`write/${id}`);
   return id;
 }
 
@@ -44,5 +47,5 @@ export function deleteCharacter(id) {
 
 export function deleteScene(id) {
   mutate((p) => { p.scenes = p.scenes.filter((s) => s.id !== id); });
-  navigate('story');
+  navigate('write');
 }

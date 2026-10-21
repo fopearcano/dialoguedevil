@@ -6,9 +6,11 @@ Un banco di lavoro interattivo e visivo per costruire personaggi di finzione e s
 
 Il punto di partenza di McKee è che il dialogo è azione verbale. Ogni battuta è una tattica con cui il personaggio cerca di ottenere ciò che vuole, e le parole poggiano su un sottotesto di desiderio, antagonismo e scelta. Dialogue Devil trasforma quel metodo in un lavoro pratico. Costruisci i personaggi dall'interno verso l'esterno e progetti le scene beat per beat. Ogni battuta si scrive sopra il suo sottotesto, e mentre scrivi la scena viene confrontata con i difetti e i rimedi del libro. Un "Avvocato del diavolo" facoltativo, basato su Claude, può intervistarti, improvvisare nei panni di un personaggio e proporre revisioni.
 
+Il pannello principale è il **tavolo di scrittura**, dove si abbozzano i dialoghi in fretta, a una voce o a più voci. Si legge come una pagina di copione e prende le battute alla velocità con cui le scrivi. Gli strumenti di McKee aspettano a margine, sotto la battuta e in un pannello laterale, invece di stare su ogni battuta.
+
 L'intera applicazione funziona in italiano: interfaccia, manuale, regole di analisi, progetto d'esempio, collaboratore AI, esportazioni, messaggi del server e console.
 
-![Laboratorio del dialogo](docs/screenshots/workshop-it.png)
+![Il tavolo di scrittura](docs/screenshots/write-it.png)
 
 ## Avvio rapido
 
@@ -19,7 +21,7 @@ npm install
 npm start
 ```
 
-Apri **http://localhost:4134**. L'interfaccia segue la lingua del browser (italiano o inglese); puoi cambiarla in **Impostazioni → Lingua**. Al primo avvio viene creato un progetto d'esempio originale, *Quello che ha lasciato* (o *What He Left* se il server è in inglese), così ogni vista ha qualcosa da mostrare. Per avere la console e il primo esempio in italiano:
+Apri **http://localhost:4134**: si apre sul tavolo di scrittura. L'interfaccia segue la lingua del browser (italiano o inglese); puoi cambiarla in **Impostazioni → Lingua**. Al primo avvio viene creato un progetto d'esempio originale, *Quello che ha lasciato* (o *What He Left* se il server è in inglese), così ogni vista ha qualcosa da mostrare. Per avere la console e il primo esempio in italiano:
 
 ```bash
 DD_LANG=it npm start
@@ -88,6 +90,42 @@ Sicurezza predefinita:
 
 Ogni principio dell'app è parafrasato dal libro e marcato con il capitolo da cui proviene (i badge rossi `Cap. n`; passa sopra con il mouse per il titolo del capitolo).
 
+### Tavolo di scrittura (il pannello principale)
+Qui si abbozzano i dialoghi, a una voce o a più voci. Ogni dialogo è una scena, quindi tutto ciò che scrivi qui alimenta anche il progetto della scena, il laboratorio dei beat, i controlli e le esportazioni.
+
+- **Una pagina di copione.** Ogni battuta mostra chi parla, l'eventuale didascalia tra parentesi e le parole. Fai clic su una battuta per modificarla sul posto. I suoi strumenti compaiono solo sulla battuta su cui sei: sottotesto, alternative, laboratorio battute AI, segnalazione, lettura da qui, nuovo beat da qui, sposta, elimina.
+- **Un compositore ancorato in fondo alla pagina.** Scegli chi parla, scrivi, premi <kbd>Invio</kbd>. Il turno passa da solo alla voce successiva: in un duologo all'altra, in un gruppo a chi aveva parlato prima.
+- **Chi c'è.** Un nuovo dialogo parte senza personaggi. Scegli quelli del progetto, o scrivi un nome nuovo e diventa un personaggio. **Si parla a:** imposta le tre direzioni di McKee (agli altri, a se stessi, al pubblico), così una sola voce può essere dialogo interiore o soliloquio (Cap. 1).
+- **Scrittura rapida** nel compositore:
+
+  | Scrivi | Ottieni |
+  |---|---|
+  | `NOME: battuta` | la battuta, detta da NOME; un nome nuovo in maiuscolo crea il personaggio |
+  | `(sottovoce) battuta` | il paralinguaggio, al suo posto |
+  | `[Se ne va.]` | un'azione: didascalia, gesto, silenzio |
+  | `---` | un cambio di beat |
+
+- **Incolla una scena intera** (una trascrizione `NOME: battuta`, o una sceneggiatura in stile Fountain): entra battuta per battuta, e i personaggi nuovi vengono creati una volta sola.
+- **I beat come stacchi.** Una riga sottile tra un beat e l'altro ne indica l'azione e la reazione (prese dalle tattiche delle battute). Aprila per impostare la carica del valore principale e l'intensità, o per togliere lo stacco.
+- **Controlli a margine.** Un piccolo segno dice quante note ha una battuta; aprilo per vedere i rilievi del doppio controllo. Togliendo la spunta a **Controlli a margine** li nascondi mentre abbozzi. La bozza nel compositore viene controllata mentre scrivi.
+- **Sottotesto su richiesta.** Con **Sottotesto** attivo, il sottotesto e l'azione (al gerundio) di ogni battuta stanno appena sotto. Quelli vuoti compaiono solo sulla battuta che stai modificando.
+- **La lente di McKee** (pannello laterale): che cosa vuole ogni voce adesso e che cosa vuole davvero; i controlli, con il salto a ogni battuta segnalata; l'arco del valore e il suo punto di svolta; quanto si distinguono le voci; le modalità dell'Avvocato del diavolo (prova, beat suggeriti, diagnosi) e *copia come sceneggiatura*.
+- Sotto il compositore, una domanda a rotazione pone il "se" magico e i cinque passi per chi sta parlando (Cap. 12, 19).
+
+| Tasti | Nel compositore | Su una battuta |
+|---|---|---|
+| <kbd>Invio</kbd> | aggiunge la battuta | apre una nuova battuta dopo |
+| <kbd>Maiusc</kbd>+<kbd>Invio</kbd> | a capo nel testo | a capo nel testo |
+| <kbd>Tab</kbd> / <kbd>Maiusc</kbd>+<kbd>Tab</kbd> | voce successiva / precedente | |
+| <kbd>Alt</kbd>+<kbd>1</kbd>…<kbd>9</kbd>, <kbd>Alt</kbd>+<kbd>0</kbd> | sceglie una voce, o un'azione | |
+| <kbd>Ctrl</kbd>+<kbd>Invio</kbd> | aggiunge la battuta come nuovo beat | |
+| <kbd>↑</kbd> (riquadro vuoto) | modifica l'ultima battuta | |
+| <kbd>Alt</kbd>+<kbd>↑</kbd> / <kbd>↓</kbd> | | sposta la battuta (anche oltre gli stacchi di beat) |
+| <kbd>Backspace</kbd> (battuta vuota) | | elimina la battuta |
+| <kbd>Esc</kbd> | esce dal riquadro (poi <kbd>Tab</kbd> va avanti) | esce dalla battuta |
+
+L'apparato completo è a un clic: **Progetto della scena**, **Laboratorio dei beat** e **Copione**.
+
 ### Cruscotto della storia
 Mezzo (teatro/cinema/televisione/narrativa) e visione (realismo o non realismo, che cambia quanto severamente si giudica il dialogo didascalico, Cap. 8). Poi il valore centrale, l'incidente scatenante e la domanda drammatica principale. Infografiche:
 - **Schede del cast** con mini impronte vocali e profondità del profilo.
@@ -110,7 +148,11 @@ Mezzo (teatro/cinema/televisione/narrativa) e visione (realismo o non realismo, 
 ### Progetto della scena
 Direzione (verso gli altri / verso sé / verso il pubblico) e modo (drammatizzato/narrato). Uno dei sei **tipi di conflitto** dei casi di studio (bilanciato, comico, asimmetrico, indiretto, riflessivo, minimo), ciascuno con i suoi consigli. **Chi vuole che cosa**: intenzioni consce e inconsce nella scena, tattiche d'apertura, percezione dell'antagonismo e chi guida la scena. **Valori in gioco** con le cariche d'apertura. Il diagramma della **terza cosa** (trialogo contro duelogo). L'esposizione da far passare, il piano del punto di svolta e la lista delle **domande chiave** del Cap. 19.
 
-### Laboratorio del dialogo (il cuore dialogico)
+### Laboratorio dei beat (l'apparato completo)
+La stessa scena del tavolo di scrittura, con tutti gli strumenti in vista.
+
+![Laboratorio dei beat](docs/screenshots/workshop-it.png)
+
 - **Arco del valore**: la carica beat per beat di ogni valore in gioco, con il punto di svolta trovato automaticamente e le barre d'intensità sotto. Passa sopra per la lettura puntuale, o passa alla vista a tabella.
 - **Beat** nominati come coppie azione/reazione al gerundio (per esempio *Teo portando doni / Nadia rifiutando l'offerta di pace*), ciascuno con le sue cariche e la sua intensità.
 - **Battute in vista a iceberg**: il detto sopra la linea di galleggiamento, il non detto e l'azione (al gerundio) sotto. Paralinguaggio, didascalie e silenzi sono elementi a pieno titolo.
@@ -219,8 +261,9 @@ public/js/model.js      Modello dei dati e costruttori
 public/js/sample.js     Progetto d'esempio originale ("What He Left")
 public/js/sample.it.js  La sua versione italiana ("Quello che ha lasciato")
 public/js/export.js     Esportazione Fountain / teatro / prosa / schema annotato
+public/js/sketch.js     Aiuti del tavolo di scrittura: scrittura rapida, copioni incollati, spostamento di battute e beat
 public/js/components/   Interfaccia condivisa e infografiche SVG (arco del valore, radar, sfere, anelli, rete…)
-public/js/views/        Storia, personaggio, progetto della scena, laboratorio, manuale, impostazioni, pannello dell'assistente
+public/js/views/        Tavolo di scrittura (write.js), storia, personaggio, progetto della scena, laboratorio, manuale, impostazioni, pannello dell'assistente
 test/                   Test node:test (analisi nelle due lingue, doppio controllo, completezza della traduzione, API REST e conflitti, filtro LAN, cicli AI contro un finto endpoint Anthropic)
 ```
 
@@ -232,6 +275,7 @@ npm test
 
 I test coprono:
 - le euristiche di analisi (un test per ogni grande famiglia di difetti), la misura della voce, il punto di svolta, le esportazioni e il progetto d'esempio;
+- gli aiuti del tavolo di scrittura: la scrittura rapida, le trascrizioni e le sceneggiature incollate (l'esportazione Fountain dei due esempi torna identica), chi parla dopo, lo spostamento di battute e stacchi di beat;
 - il doppio controllo: richiamo sulle serie di taratura e di verifica, nessun falso allarme sulle battute pulite, stati, contestazioni, rilievi ignorati e rilievi AI superati;
 - la versione italiana: ogni testo mostrato dall'app tradotto con i suoi segnaposto (il test cerca nel codice ogni stringa visibile e fallisce se manca la traduzione), le due basi di conoscenza identiche voce per voce, le regole italiane (elisioni, passivo, burocratese, gerundi, radici), il richiamo e i falsi allarmi in italiano, l'esempio e le esportazioni italiane;
 - l'API REST, compresi i conflitti di revisione e i salvataggi concorrenti;

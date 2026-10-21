@@ -6,7 +6,9 @@ An interactive, visual workbench for building fictional characters and developin
 
 McKee's starting point is that dialogue is verbal action. Every line is a tactic a character uses to get what she wants, and the words sit on top of a subtext of desire, antagonism and choice. Dialogue Devil makes that method something you can work through hands-on. You build characters from the inside out and design scenes beat by beat. Each line is written over its subtext, and the scene is checked against the book's flaws and fixes while you write. An optional Claude-powered "Devil's Advocate" can interview you, improvise in character, and propose revisions.
 
-![Dialogue workshop](docs/screenshots/workshop.png)
+The main panel is the **writing desk**, a place to sketch dialogue quickly for one voice or many. It reads like a script page and takes lines as fast as you type them. McKee's tools wait in the margin, under the line and in a side panel instead of sitting on every line.
+
+![The writing desk](docs/screenshots/write.png)
 
 ## Quick start
 
@@ -17,7 +19,7 @@ npm install
 npm start
 ```
 
-Open **http://localhost:4134**. The first run creates an original sample project, *What He Left* (*Quello che ha lasciato* when the server runs in Italian), so every view has something to show. The interface follows your browser's language (English or Italian); change it in **Settings → Language**.
+Open **http://localhost:4134**: it opens on the writing desk. The first run creates an original sample project, *What He Left* (*Quello che ha lasciato* when the server runs in Italian), so every view has something to show. The interface follows your browser's language (English or Italian); change it in **Settings → Language**.
 
 The server also listens on your local network. At startup it prints the address to open on a phone, tablet or another computer on the same Wi-Fi:
 
@@ -95,11 +97,47 @@ The first held-out set was then used to fix general gaps, so it no longer counts
 
 To add another language, add a dictionary (`public/js/locales/`), a knowledge base (`public/js/kb/`), an analysis pack (`public/js/lang/`), and an entry in `LANGS` (`public/js/i18n.js`).
 
-![Dialogue workshop in Italian](docs/screenshots/workshop-it.png)
+![The writing desk in Italian](docs/screenshots/write-it.png)
 
 ## What's inside
 
 Every principle in the app is paraphrased from the book and tagged with the chapter it comes from (the red `Ch. n` badges; hover for the chapter title).
+
+### Writing desk (the main panel)
+Where dialogue gets sketched, for one voice or many. Each dialogue is a scene, so everything written here also feeds the scene design, the beat workshop, the checks and the exports.
+
+- **A script page.** Each line shows who speaks, any parenthetical, and the words. Click any line to edit it in place. Its tools appear only on the line you're on: subtext, alternatives, AI line lab, flag, read from here, new beat here, move, delete.
+- **A composer docked at the foot of the page.** Pick a speaker chip, type, press <kbd>Enter</kbd>. The turn passes to the next voice on its own: in a duologue the other one, in a group whoever spoke before.
+- **Who's in it.** A new dialogue starts with an empty cast. Pick characters from the project, or type a new name and it becomes a character. **Talking to:** sets McKee's three tracks (to others, to oneself, to the audience), so a single voice can be inner dialogue or a soliloquy (Ch. 1).
+- **Quick syntax** in the composer:
+
+  | Type | You get |
+  |---|---|
+  | `NAME: line` | the line, spoken by NAME; a new name in capitals creates the character |
+  | `(softly) line` | paralanguage, in its own place |
+  | `[She leaves.]` | an action: stage direction, gesture, silence |
+  | `---` | a beat break |
+
+- **Paste a whole scene** (a `NAME: line` transcript, or a screenplay in Fountain style) and it comes in line by line, with new characters created once.
+- **Beats as breaks.** A thin rule between beats names its action and reaction (filled from the lines' tactics). Open it to set the main value's charge and the intensity, or remove the break.
+- **Checks in the margin.** A small marker shows how many notes a line has; open it for the findings from the double-check. *Quiet drafting* (untick **Checks in the margin**) hides them while you sketch. The draft in the composer is checked as you type.
+- **Subtext on demand.** With **Subtext** on, each line's subtext and action (gerund) sit just under it. Empty ones appear only on the line you're editing.
+- **The McKee lens** (side panel): what each voice wants right now and really wants; the checks, with a jump to each flagged line; the value arc and its turning point; how distinct the voices are; and the Devil's Advocate modes (rehearse, suggest beats, diagnose) plus *copy as screenplay*.
+- A rotating prompt under the composer asks the Magic If and the five steps for the current speaker (Ch. 12, 19).
+
+| Keys | In the composer | On a line |
+|---|---|---|
+| <kbd>Enter</kbd> | add the line | open a new line after it |
+| <kbd>Shift</kbd>+<kbd>Enter</kbd> | new line inside the text | new line inside the text |
+| <kbd>Tab</kbd> / <kbd>Shift</kbd>+<kbd>Tab</kbd> | next / previous voice | |
+| <kbd>Alt</kbd>+<kbd>1</kbd>…<kbd>9</kbd>, <kbd>Alt</kbd>+<kbd>0</kbd> | pick a voice, or an action | |
+| <kbd>Ctrl</kbd>+<kbd>Enter</kbd> | add the line as a new beat | |
+| <kbd>↑</kbd> (empty box) | edit the last line | |
+| <kbd>Alt</kbd>+<kbd>↑</kbd> / <kbd>↓</kbd> | | move the line (across beat breaks too) |
+| <kbd>Backspace</kbd> (empty line) | | delete the line |
+| <kbd>Esc</kbd> | leave the box (then <kbd>Tab</kbd> moves on) | leave the line |
+
+The full apparatus is one click away: **Scene design**, **Beat workshop** and **Script**.
 
 ### Story dashboard
 Medium (stage/screen/TV/prose) and vision (realism or nonrealism, which changes how strictly on-the-nose dialogue is judged, Ch. 8). Also the core value, inciting incident and major dramatic question. Infographics:
@@ -123,7 +161,11 @@ Medium (stage/screen/TV/prose) and vision (realism or nonrealism, which changes 
 ### Scene design
 Track (to others / to self / to audience) and mode (dramatized/narratized). One of six **conflict types** from the case studies (balanced, comic, asymmetric, indirect, reflexive, minimal), each with its own craft tips. **Who wants what**: conscious and subconscious scene intentions, opening tactics, sense of antagonism, and the scene driver. **Values at stake** with opening charges. **Third thing** diagram (trialogue vs. duelogue). Exposition to smuggle, the turning-point plan, and the Ch. 19 **key questions** checklist.
 
-### Dialogue workshop (the dialogic core)
+### Beat workshop (the full apparatus)
+The same scene as on the writing desk, with every tool laid out at once.
+
+![Beat workshop](docs/screenshots/workshop.png)
+
 - **Value arc**: charge per beat for each value at stake, with the turning point found automatically and beat intensity bars beneath. Hover for the crosshair readout, or switch to a table view.
 - **Beats** named as action/reaction gerunds (e.g. *Teo bearing gifts / Nadia refusing the peace offering*), each with its own charges and intensity.
 - **Lines in iceberg view**: the said above the waterline, the unsaid and the action (gerund) below it. Paralanguage, stage directions and silence are first-class.
@@ -233,8 +275,9 @@ public/js/model.js      Data model and factories
 public/js/sample.js     Original sample project ("What He Left")
 public/js/sample.it.js  Its Italian counterpart ("Quello che ha lasciato")
 public/js/export.js     Fountain / stage / prose / annotated exporters
+public/js/sketch.js     Writing-desk helpers: quick-entry syntax, pasted scripts, line and beat moves
 public/js/components/   Shared UI and SVG infographics (value arc, radar, spheres, rings, web…)
-public/js/views/        Story, character, scene design, workshop, handbook, settings, assistant drawer
+public/js/views/        Writing desk (write.js), story, character, scene design, workshop, handbook, settings, assistant drawer
 test/                   node:test suites (analysis in both languages, double-check, translation completeness, REST API and conflicts, LAN guard, AI loops against a fake Anthropic endpoint)
 ```
 
@@ -246,6 +289,7 @@ npm test
 
 The suites cover:
 - the analysis heuristics (one test per major flaw family), voice measurement, turning-point detection, the exporters and the sample project;
+- the writing desk's helpers: the quick-entry syntax, pasted transcripts and screenplays (the Fountain export of both samples round-trips), who speaks next, and moving lines and beat breaks;
 - the double-check: recall on the tuning and held-out sets, no false alarms on clean lines, statuses, disputes, dismissals and stale AI findings;
 - the Italian version: every displayed string translated with its placeholders, the knowledge bases matching entry for entry, the Italian rules (elisions, passive, *burocratese*, gerunds, stemming), Italian recall and false alarms, the Italian sample and exports;
 - the REST API, including revision conflicts and concurrent saves;

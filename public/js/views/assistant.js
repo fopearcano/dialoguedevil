@@ -1,8 +1,8 @@
 import { html, useState, useEffect, useRef, cx, charColor, miniMarkdown } from '../lib.js';
-import { state, mutate, act, navigate, aiAvailable, setSetting } from '../store.js';
+import { state, mutate, act, navigate, aiAvailable, setSetting, activeScene } from '../store.js';
 import { Tabs, Cite, CharSelect, TextArea, Icon, Meter, CharDot, rich } from '../components/ui.js';
 import { INTERVIEW, CHARACTER_SECTIONS, VOICE_DIMENSIONS, VOICE_EXERCISES, MODALITIES, cite } from '../mckee.js';
-import { getPath, setPath, uid, characterById, sceneById, newBeat, newLine, locateLine } from '../model.js';
+import { getPath, setPath, uid, characterById, newBeat, newLine, locateLine } from '../model.js';
 import { doubleCheckScene } from '../doublecheck.js';
 import { streamChat } from '../api.js';
 import { briefChar, fullChar, sceneForAI, projectMeta, analyzerSummary } from '../aicontext.js';
@@ -18,7 +18,7 @@ const TAB_DEFS = {
 };
 
 function tabsForRoute(route) {
-  if (route.name === 'scene') return ['rehearse', 'doctor', 'beats', 'lab', 'interview'];
+  if (route.name === 'scene' || route.name === 'write') return ['rehearse', 'doctor', 'beats', 'lab', 'interview'];
   return ['interview', 'coach', 'rehearse'];
 }
 
@@ -52,7 +52,7 @@ function useTargetCharacter() {
   const [picked, setPicked] = useState('');
   let id = picked;
   if (!id && r.name === 'character') id = r.id;
-  if (!id && r.name === 'scene') id = sceneById(p, r.id)?.participants[0]?.characterId;
+  if (!id) id = activeScene()?.participants[0]?.characterId;
   if (!id) id = p.characters[0]?.id;
   useEffect(() => { if (r.name === 'character') setPicked(''); }, [r.id]);
   return [characterById(p, id), setPicked];
@@ -145,8 +145,7 @@ function toApiMessages(msgs, p) {
 
 function AiPanel({ mode }) {
   const p = state.project;
-  const r = state.route;
-  const scene = r.name === 'scene' ? sceneById(p, r.id) : null;
+  const scene = activeScene();
   const [c, setC] = useTargetCharacter();
   const [partnerId, setPartnerId] = useState('');
   const [input, setInput] = useState('');

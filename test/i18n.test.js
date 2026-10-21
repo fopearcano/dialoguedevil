@@ -27,7 +27,7 @@ test('translations keep their placeholders and are actually translated', () => {
   const broken = Object.entries(IT).filter(([k, v]) => placeholders(k) !== placeholders(v)).map(([k]) => k);
   assert.deepEqual(broken, []);
   // Identical in both languages on purpose.
-  const same = new Set(['Cliché: {terms}.', 'Beat {n}', 'B', 'Coach', 'BEAT {n}']);
+  const same = new Set(['Cliché: {terms}.', 'Beat {n}', 'B', 'Coach', 'BEAT {n}', '{n} beat']);
   const untranslated = Object.entries(IT).filter(([k, v]) => k === v && !same.has(k)).map(([k]) => k);
   assert.deepEqual(untranslated, []);
 });

@@ -2,7 +2,7 @@
 // routing, settings, autosave and undo/redo.
 
 import { useState, useEffect, debounce } from './lib.js';
-import { normalizeProject } from './model.js';
+import { normalizeProject, sceneById } from './model.js';
 import { setLang, guessLang, tr } from './i18n.js';
 import { useKb } from './mckee.js';
 import * as api from './api.js';
@@ -11,7 +11,7 @@ const SETTINGS_KEY = 'dd:settings';
 const listeners = new Set();
 
 function loadSettings() {
-  const defaults = { lang: guessLang(navigator.languages || [navigator.language]), theme: 'system', apiKey: '', model: '', showSubtext: true, showPossible: true, showDismissed: false, readDirections: false, lastProjectId: '', drawerOpen: window.innerWidth >= 1240 };
+  const defaults = { lang: guessLang(navigator.languages || [navigator.language]), theme: 'system', apiKey: '', model: '', showSubtext: true, showPossible: true, showDismissed: false, readDirections: false, quietChecks: false, lensOpen: window.innerWidth >= 1100, lastScene: {}, lastProjectId: '', drawerOpen: window.innerWidth >= 1500 };
   try {
     return { ...defaults, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}') };
   } catch {
@@ -21,7 +21,7 @@ function loadSettings() {
 
 export function parseHash(hash = location.hash) {
   const parts = hash.replace(/^#\/?/, '').split('/').filter(Boolean).map(decodeURIComponent);
-  const [name = 'story', id = '', tab = ''] = parts;
+  const [name = 'write', id = '', tab = ''] = parts;
   return { name, id, tab };
 }
 
@@ -79,6 +79,22 @@ export function applyTheme() {
   const t = state.settings.theme;
   if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
   else delete document.documentElement.dataset.theme;
+}
+
+// The scene the writing desk shows: the route's, else the last one written
+// in, else the first.
+export function deskScene(p = state.project, id = '') {
+  if (!p) return null;
+  if (id) return sceneById(p, id) || null;
+  return sceneById(p, state.settings.lastScene?.[p.id]) || p.scenes[0] || null;
+}
+
+// The scene the current page works on (the assistant drawer follows it).
+export function activeScene() {
+  const r = state.route;
+  if (r.name === 'scene') return sceneById(state.project, r.id) || null;
+  if (r.name === 'write') return deskScene(state.project, r.id);
+  return null;
 }
 
 export function navigate(path) {
@@ -340,7 +356,7 @@ export async function createAndOpen(body) {
   const p = await api.createProject({ lang: state.settings.lang, ...body });
   await refreshProjects();
   await openProject(p.id);
-  navigate('story');
+  navigate('write');
   return p;
 }
 

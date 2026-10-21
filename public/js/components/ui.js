@@ -45,9 +45,9 @@ export function TextArea({ value, onInput, placeholder, rows = 2, class: klass, 
     onInput=${(e) => onInput(e.currentTarget.value)} onKeyDown=${onKeyDown} ...${rest}></textarea>`;
 }
 
-export function GerundInput({ value, onInput, placeholder, class: klass }) {
+export function GerundInput({ value, onInput, placeholder, class: klass, ...rest }) {
   return html`<input class=${cx('input gerund', klass)} type="text" list="dd-tactics" value=${value ?? ''} placeholder=${placeholder ?? tr('action as a gerund…')}
-    onInput=${(e) => onInput(e.currentTarget.value)} />`;
+    onInput=${(e) => onInput(e.currentTarget.value)} ...${rest} />`;
 }
 
 // Datalist of tactic gerunds, rendered once at the app root.
@@ -268,6 +268,8 @@ export function Icon({ name, size = 16 }) {
     play: 'M5 3l8 5-8 5z',
     stop: 'M4 4h8v8H4z',
     check2: 'M1.5 8.5l2.5 2.5L9 5.5M7 10.5l.5.5L13 5.5',
+    pen: 'M3 13l.8-3.2L11 2.6 13.4 5 6.2 12.2zM9.6 4l2.4 2.4',
+    beat: 'M1.5 8h3M6.5 8h3M11.5 8h3M8 2.5v2.5M8 11v2.5',
   };
   return html`<svg class="icon" viewBox="0 0 16 16" width=${size} height=${size} aria-hidden="true"><path d=${paths[name] || ''} /></svg>`;
 }

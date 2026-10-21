@@ -1,7 +1,7 @@
 import { html, render, useEffect, useState, cx } from './lib.js';
 import { tr, fmtTime } from './i18n.js';
 import {
-  state, useStore, boot, navigate, undo, redo, canUndo, canRedo, setSetting, aiAvailable, resolveConflict,
+  state, useStore, boot, navigate, undo, redo, canUndo, canRedo, setSetting, aiAvailable, resolveConflict, deskScene,
 } from './store.js';
 import { Icon, TacticsDatalist, CharDot } from './components/ui.js';
 import { Sparkline } from './components/viz.js';
@@ -10,6 +10,7 @@ import { CHARACTER_SECTIONS, mediumName } from './mckee.js';
 import { characterById, sceneById } from './model.js';
 import { addCharacter, addScene } from './actions.js';
 import { StoryView } from './views/story.js';
+import { WriteView } from './views/write.js';
 import { CharacterView } from './views/character.js';
 import { SceneView } from './views/scene.js';
 import { HandbookView } from './views/handbook.js';
@@ -33,6 +34,7 @@ function SaveStatus() {
 function Sidebar({ open, onClose, onProjects }) {
   const p = state.project;
   const r = state.route;
+  const desk = r.name === 'write' ? deskScene(p, r.id) : null;
   const go = (path) => { navigate(path); onClose(); };
   return html`<nav class=${cx('sidebar', open && 'open')} aria-label=${tr('Main')}>
     <div class="brand">
@@ -48,6 +50,7 @@ function Sidebar({ open, onClose, onProjects }) {
     </button>
 
     <div class="nav-group">
+      <a href="#/write" class=${cx('nav-item', r.name === 'write' && 'active')} onClick=${() => onClose()}><${Icon} name="pen" />${tr('Write')}</a>
       <a href="#/story" class=${cx('nav-item', r.name === 'story' && 'active')} onClick=${() => onClose()}><${Icon} name="story" />${tr('Story')}</a>
       <a href="#/handbook" class=${cx('nav-item', r.name === 'handbook' && 'active')} onClick=${() => onClose()}><${Icon} name="book" />${tr('Handbook')}</a>
     </div>
@@ -69,7 +72,8 @@ function Sidebar({ open, onClose, onProjects }) {
     <div class="nav-group">
       ${(p?.scenes || []).map((s) => {
         const arc = valueArc(s)[0];
-        return html`<a href=${`#/scene/${s.id}/${s.beats.length ? 'workshop' : 'design'}`} class=${cx('nav-item scene-item', r.name === 'scene' && r.id === s.id && 'active')} onClick=${() => onClose()}>
+        const on = (r.name === 'scene' && r.id === s.id) || (r.name === 'write' && desk?.id === s.id);
+        return html`<a href=${`#/write/${s.id}`} class=${cx('nav-item scene-item', on && 'active')} onClick=${() => onClose()}>
           <${Icon} name="scene" />
           <span class="nav-label">${s.title}</span>
           ${arc ? html`<${Sparkline} points=${arc.points} width=${46} height=${18} />` : ''}
@@ -93,6 +97,7 @@ function Topbar({ onMenu }) {
   let crumb = tr('Story');
   if (r.name === 'character') crumb = (p && characterById(p, r.id)?.name) || tr('Character');
   if (r.name === 'scene') crumb = (p && sceneById(p, r.id)?.title) || tr('Scene');
+  if (r.name === 'write') crumb = (p && deskScene(p, r.id)?.title) || tr('Write');
   if (r.name === 'handbook') crumb = tr('Handbook');
   if (r.name === 'settings') crumb = tr('Settings');
   return html`<header class="topbar">
@@ -120,13 +125,14 @@ function Main() {
     const s = sceneById(p, r.id);
     return s ? html`<${SceneView} key=${s.id} scene=${s} tab=${r.tab} />` : html`<${NotFound} />`;
   }
+  if (r.name === 'write') return html`<${WriteView} id=${r.id} />`;
   if (r.name === 'handbook') return html`<${HandbookView} section=${r.id} />`;
   if (r.name === 'settings') return html`<${SettingsView} />`;
   return html`<${StoryView} />`;
 }
 
 function NotFound() {
-  return html`<div class="page"><div class="empty"><div class="empty-title">${tr('Not found in this project.')}</div><a href="#/story">${tr('Back to the story')}</a></div></div>`;
+  return html`<div class="page"><div class="empty"><div class="empty-title">${tr('Not found in this project.')}</div><a href="#/write">${tr('Back to writing')}</a></div></div>`;
 }
 
 // Another device saved this project after this one loaded it. Nothing is
