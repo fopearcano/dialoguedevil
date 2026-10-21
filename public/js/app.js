@@ -1,8 +1,9 @@
 import { html, render, useEffect, useState, cx } from './lib.js';
 import { tr, fmtTime } from './i18n.js';
 import {
-  state, useStore, boot, navigate, undo, redo, canUndo, canRedo, setSetting, aiAvailable, resolveConflict, deskScene,
+  state, useStore, boot, navigate, undo, redo, canUndo, canRedo, setSetting, aiAvailable, resolveConflict, deskScene, activeScene, toggleHelp,
 } from './store.js';
+import { isTyping } from './shortcuts.js';
 import { Icon, TacticsDatalist, CharDot } from './components/ui.js';
 import { Sparkline } from './components/viz.js';
 import { valueArc, profileCompleteness } from './analysis.js';
@@ -17,6 +18,7 @@ import { HandbookView } from './views/handbook.js';
 import { SettingsView } from './views/settings.js';
 import { AssistantDrawer } from './views/assistant.js';
 import { ProjectsModal } from './views/projects.js';
+import { HelpView, ShortcutsModal } from './views/help.js';
 
 export function Logo({ size = 28 }) {
   return html`<svg class="logo" width=${size} height=${size} viewBox="0 0 32 32" aria-hidden="true">
@@ -83,6 +85,7 @@ function Sidebar({ open, onClose, onProjects }) {
 
     <div class="sidebar-foot">
       <a href="#/settings" class=${cx('nav-item', r.name === 'settings' && 'active')} onClick=${() => onClose()}><${Icon} name="gear" />${tr('Settings')}</a>
+      <a href="#/help" class=${cx('nav-item', r.name === 'help' && 'active')} onClick=${() => onClose()}><${Icon} name="help" />${tr('Help')}<span class="nav-meta"><kbd>?</kbd></span></a>
       <div class="ai-pill-row">
         <span class=${cx('ai-pill', aiAvailable() ? 'on' : 'off')}>${aiAvailable() ? (state.ai?.mock ? tr('AI · mock') : tr('AI · on')) : tr('AI · off')}</span>
         <${SaveStatus} />
@@ -100,10 +103,13 @@ function Topbar({ onMenu }) {
   if (r.name === 'write') crumb = (p && deskScene(p, r.id)?.title) || tr('Write');
   if (r.name === 'handbook') crumb = tr('Handbook');
   if (r.name === 'settings') crumb = tr('Settings');
+  if (r.name === 'help') crumb = tr('Help');
   return html`<header class="topbar">
     <button type="button" class="icon-btn menu-btn" aria-label=${tr('Open menu')} onClick=${onMenu}><${Icon} name="menu" /></button>
     <div class="crumb"><span class="muted">${p?.title || ''}</span><span class="crumb-sep">/</span><strong>${crumb}</strong></div>
     <div class="topbar-actions">
+      ${state.settings.focusMode ? html`<button type="button" class="btn btn-quiet btn-small" onClick=${() => setSetting('focusMode', false)} title=${tr('Leave focus mode (z)')}>${tr('Leave focus mode')}</button>` : ''}
+      <button type="button" class="icon-btn" title=${tr('Keyboard shortcuts (?)')} aria-label=${tr('Keyboard shortcuts')} onClick=${() => toggleHelp(true)}><${Icon} name="help" /></button>
       <button type="button" class="icon-btn" title=${tr('Undo (Ctrl+Z outside text fields)')} aria-label=${tr('Undo')} disabled=${!canUndo()} onClick=${undo}><${Icon} name="undo" /></button>
       <button type="button" class="icon-btn" title=${tr('Redo')} aria-label=${tr('Redo')} disabled=${!canRedo()} onClick=${redo}><${Icon} name="redo" /></button>
       <button type="button" class=${cx('btn', state.settings.drawerOpen ? 'btn-quiet active' : 'btn-quiet')} onClick=${() => setSetting('drawerOpen', !state.settings.drawerOpen)} aria-pressed=${state.settings.drawerOpen} title=${tr('Devil\'s Advocate')}>
@@ -127,6 +133,7 @@ function Main() {
   }
   if (r.name === 'write') return html`<${WriteView} id=${r.id} />`;
   if (r.name === 'handbook') return html`<${HandbookView} section=${r.id} />`;
+  if (r.name === 'help') return html`<${HelpView} section=${r.id} />`;
   if (r.name === 'settings') return html`<${SettingsView} />`;
   return html`<${StoryView} />`;
 }
@@ -162,27 +169,86 @@ function Toast() {
   return html`<div class=${cx('toast', state.toast.kind)} role="status">${state.toast.message}</div>`;
 }
 
-function App() {
-  useStore();
-  const [menu, setMenu] = useState(false);
-  const [projects, setProjects] = useState(false);
+// Focus the writing box, opening the desk first if needed.
+function focusWritingBox() {
+  const tryFocus = (n) => {
+    const el = document.querySelector('.desk-composer .entry-text');
+    if (el) el.focus();
+    else if (n > 0) setTimeout(() => tryFocus(n - 1), 40);
+  };
+  if (state.route.name !== 'write') navigate(`write/${activeScene()?.id || ''}`);
+  tryFocus(10);
+}
+
+// The previous or next scene, in the same view.
+function stepScene(dir) {
+  const p = state.project;
+  if (!p?.scenes.length) return;
+  const cur = activeScene() || deskScene(p);
+  const i = p.scenes.findIndex((s) => s.id === cur?.id);
+  const next = p.scenes[(i + dir + p.scenes.length) % p.scenes.length];
+  const r = state.route;
+  navigate(r.name === 'scene' ? `scene/${next.id}/${r.tab || ''}` : `write/${next.id}`);
+}
+
+// App-wide keys (listed in shortcuts.js). Single letters only act outside
+// text boxes; Ctrl+/ opens the shortcuts from anywhere.
+function useShortcuts() {
   useEffect(() => {
+    let prefix = '';
+    let timer = 0;
     const onKey = (e) => {
-      const tag = (e.target.tagName || '').toLowerCase();
-      if (tag === 'input' || tag === 'textarea' || tag === 'select' || e.target.isContentEditable) return;
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
-        e.preventDefault();
-        if (e.shiftKey) redo(); else undo();
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key === '/') { e.preventDefault(); toggleHelp(); return; }
+      if (isTyping(e.target) || e.defaultPrevented) return;
+      if (e.ctrlKey || e.metaKey) {
+        if (e.key.toLowerCase() === 'z') { e.preventDefault(); if (e.shiftKey) redo(); else undo(); }
+        return;
       }
+      if (e.altKey) return;
+      // Inside the projects dialog or the shortcuts overlay, only Esc (handled there).
+      if (document.querySelector('.modal-backdrop') && e.key !== '?') return;
+      const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+      if (prefix === 'g') {
+        prefix = '';
+        clearTimeout(timer);
+        const to = { w: 'write', s: 'story', h: 'handbook', ',': 'settings' }[k];
+        if (to) { e.preventDefault(); navigate(to); }
+        return;
+      }
+      const toggle = (key) => setSetting(key, !state.settings[key]);
+      const run = {
+        '?': () => toggleHelp(),
+        '/': focusWritingBox,
+        n: () => addScene(tr('Dialogue {n}', { n: (state.project?.scenes.length || 0) + 1 })),
+        '[': () => stepScene(-1),
+        ']': () => stepScene(1),
+        g: () => { prefix = 'g'; timer = setTimeout(() => { prefix = ''; }, 1200); },
+        s: () => toggle('showSubtext'),
+        q: () => toggle('quietChecks'),
+        l: () => toggle('lensOpen'),
+        z: () => toggle('focusMode'),
+        a: () => toggle('drawerOpen'),
+        r: () => window.dispatchEvent(new CustomEvent('dd:read-aloud')),
+      }[k];
+      if (!run || !state.project) return;
+      e.preventDefault();
+      run();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
+}
+
+function App() {
+  useStore();
+  const [menu, setMenu] = useState(false);
+  const [projects, setProjects] = useState(false);
+  useShortcuts();
   const drawer = state.settings.drawerOpen;
   // The scrim is always rendered and toggled with `hidden`: inserting it on
   // open would let Preact reuse the .main-col element mid-click, and the same
   // tap that opened the menu would close it.
-  return html`<div class=${cx('shell', drawer && 'with-drawer')}>
+  return html`<div class=${cx('shell', drawer && 'with-drawer', state.settings.focusMode && 'focus-mode')}>
     <${TacticsDatalist} />
     <${Sidebar} open=${menu} onClose=${() => setMenu(false)} onProjects=${() => { setMenu(false); setProjects(true); }} />
     <div class="scrim" hidden=${!menu} onClick=${() => setMenu(false)}></div>
@@ -192,6 +258,7 @@ function App() {
     </div>
     ${drawer && state.project ? html`<div class="drawer-scrim" onClick=${() => setSetting('drawerOpen', false)}></div><${AssistantDrawer} />` : ''}
     <${ProjectsModal} open=${projects} onClose=${() => setProjects(false)} />
+    <${ShortcutsModal} open=${state.help} onClose=${() => toggleHelp(false)} />
     <${Toast} />
   </div>`;
 }

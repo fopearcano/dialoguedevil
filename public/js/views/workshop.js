@@ -81,6 +81,14 @@ export function useTableRead(scene) {
     try { window.speechSynthesis?.getVoices(); } catch { /* warm the voice list */ }
     return stop;
   }, []);
+  // The "r" shortcut (app.js) starts or stops the read.
+  const toggleRef = useRef(null);
+  toggleRef.current = () => (cur ? stop() : start());
+  useEffect(() => {
+    const onRead = () => toggleRef.current?.();
+    window.addEventListener('dd:read-aloud', onRead);
+    return () => window.removeEventListener('dd:read-aloud', onRead);
+  }, []);
   useEffect(() => {
     if (!cur) return undefined;
     const onKey = (e) => {

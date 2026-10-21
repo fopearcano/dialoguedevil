@@ -11,7 +11,7 @@ const SETTINGS_KEY = 'dd:settings';
 const listeners = new Set();
 
 function loadSettings() {
-  const defaults = { lang: guessLang(navigator.languages || [navigator.language]), theme: 'system', apiKey: '', model: '', showSubtext: true, showPossible: true, showDismissed: false, readDirections: false, quietChecks: false, lensOpen: window.innerWidth >= 1100, lastScene: {}, lastProjectId: '', drawerOpen: window.innerWidth >= 1500 };
+  const defaults = { lang: guessLang(navigator.languages || [navigator.language]), theme: 'system', apiKey: '', model: '', showSubtext: true, showPossible: true, showDismissed: false, readDirections: false, quietChecks: false, lensOpen: window.innerWidth >= 1100, focusMode: false, smartPunctuation: true, lastScene: {}, lastProjectId: '', drawerOpen: window.innerWidth >= 1500 };
   try {
     return { ...defaults, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}') };
   } catch {
@@ -37,6 +37,7 @@ export const state = {
   toast: null,
   drawer: { tab: '', request: null },
   conflict: null, // { remote } when another device saved first
+  help: false, // the keyboard shortcuts overlay
 };
 
 export function emit() {
@@ -388,6 +389,11 @@ export async function boot() {
 
 export function aiAvailable() {
   return Boolean(state.ai?.mock || state.ai?.serverKey || state.settings.apiKey);
+}
+
+export function toggleHelp(open = !state.help) {
+  state.help = open;
+  emit();
 }
 
 // Ask the assistant drawer to open a tab, optionally with a request payload

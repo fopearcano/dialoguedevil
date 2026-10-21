@@ -270,6 +270,8 @@ export function Icon({ name, size = 16 }) {
     check2: 'M1.5 8.5l2.5 2.5L9 5.5M7 10.5l.5.5L13 5.5',
     pen: 'M3 13l.8-3.2L11 2.6 13.4 5 6.2 12.2zM9.6 4l2.4 2.4',
     beat: 'M1.5 8h3M6.5 8h3M11.5 8h3M8 2.5v2.5M8 11v2.5',
+    help: 'M8 14.5a6.5 6.5 0 110-13 6.5 6.5 0 010 13zM6.2 6.3a1.9 1.9 0 113.1 1.5c-.8.5-1.3.9-1.3 1.8M8 11.4v.1',
+    focus: 'M2 5.5V2h3.5M10.5 2H14v3.5M14 10.5V14h-3.5M5.5 14H2v-3.5',
   };
   return html`<svg class="icon" viewBox="0 0 16 16" width=${size} height=${size} aria-hidden="true"><path d=${paths[name] || ''} /></svg>`;
 }

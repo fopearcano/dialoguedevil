@@ -112,19 +112,51 @@ Qui si abbozzano i dialoghi, a una voce o a più voci. Ogni dialogo è una scena
 - **La lente di McKee** (pannello laterale): che cosa vuole ogni voce adesso e che cosa vuole davvero; i controlli, con il salto a ogni battuta segnalata; l'arco del valore e il suo punto di svolta; quanto si distinguono le voci; le modalità dell'Avvocato del diavolo (prova, beat suggeriti, diagnosi) e *copia come sceneggiatura*.
 - Sotto il compositore, una domanda a rotazione pone il "se" magico e i cinque passi per chi sta parlando (Cap. 12, 19).
 
-| Tasti | Nel compositore | Su una battuta |
+- **Punteggiatura automatica** mentre scrivi: `--` diventa una lineetta (una battuta troncata) e `...` dei puntini (una battuta che si spegne). Si può disattivare nelle Impostazioni.
+- **Modalità concentrazione** (<kbd>z</kbd>, o **Concentrazione** nella barra) nasconde la barra laterale e la lente: restano solo la pagina e il riquadro di scrittura.
+
+#### Scorciatoie da tastiera
+Premi <kbd>?</kbd> ovunque, o <kbd>Ctrl</kbd>+<kbd>/</kbd> anche dentro un campo di testo, per vederle tutte. Su Mac <kbd>⌘</kbd> sostituisce <kbd>Ctrl</kbd>. I tasti a una lettera funzionano fuori dai campi di testo. Dentro, l'app evita Alt+lettera, che i browser usano per i loro menu. Su Linux alcuni browser cambiano scheda con Alt+1…9: lì usa <kbd>Tab</kbd> o i pulsanti delle voci.
+
+| Tasti | Nel riquadro di scrittura | Su una battuta del copione |
 |---|---|---|
-| <kbd>Invio</kbd> | aggiunge la battuta | apre una nuova battuta dopo |
-| <kbd>Maiusc</kbd>+<kbd>Invio</kbd> | a capo nel testo | a capo nel testo |
-| <kbd>Tab</kbd> / <kbd>Maiusc</kbd>+<kbd>Tab</kbd> | voce successiva / precedente | |
-| <kbd>Alt</kbd>+<kbd>1</kbd>…<kbd>9</kbd>, <kbd>Alt</kbd>+<kbd>0</kbd> | sceglie una voce, o un'azione | |
-| <kbd>Ctrl</kbd>+<kbd>Invio</kbd> | aggiunge la battuta come nuovo beat | |
-| <kbd>↑</kbd> (riquadro vuoto) | modifica l'ultima battuta | |
-| <kbd>Alt</kbd>+<kbd>↑</kbd> / <kbd>↓</kbd> | | sposta la battuta (anche oltre gli stacchi di beat) |
-| <kbd>Backspace</kbd> (battuta vuota) | | elimina la battuta |
+| <kbd>Invio</kbd> | aggiunge la battuta; il turno passa alla voce successiva | nuova battuta dopo, per la voce successiva |
+| <kbd>Alt</kbd>+<kbd>Invio</kbd> | aggiunge la battuta; la stessa voce continua | nuova battuta dopo, per la stessa voce |
+| <kbd>Ctrl</kbd>+<kbd>Invio</kbd> | aggiunge la battuta come inizio di un nuovo beat | inizia un nuovo beat da questa battuta |
+| <kbd>Maiusc</kbd>+<kbd>Invio</kbd> | a capo dentro la battuta | a capo dentro la battuta |
+| <kbd>Tab</kbd> | riquadro vuoto: voce successiva; con il testo scritto: scende sotto la battuta (sottotesto, poi azione) | scende sotto la battuta |
+| <kbd>Maiusc</kbd>+<kbd>Tab</kbd> | voce precedente | |
+| <kbd>Alt</kbd>+<kbd>1</kbd>…<kbd>9</kbd> | sceglie una voce | dà la battuta a quella voce |
+| <kbd>Alt</kbd>+<kbd>0</kbd> | scrive un'azione | trasforma la battuta in azione, o viceversa |
+| <kbd>↑</kbd> / <kbd>↓</kbd> | <kbd>↑</kbd> dall'inizio: modifica l'ultima battuta | all'inizio / alla fine: va alla battuta sopra / sotto |
+| <kbd>Alt</kbd>+<kbd>↑</kbd> / <kbd>↓</kbd> | | sposta la battuta (anche oltre i cambi di beat) |
+| <kbd>Backspace</kbd> | | su una battuta vuota: la elimina |
 | <kbd>Esc</kbd> | esce dal riquadro (poi <kbd>Tab</kbd> va avanti) | esce dalla battuta |
 
+| Fuori da un campo di testo | |
+|---|---|
+| <kbd>?</kbd> | le scorciatoie da tastiera |
+| <kbd>/</kbd> | vai al riquadro di scrittura |
+| <kbd>n</kbd> | nuovo dialogo |
+| <kbd>[</kbd> / <kbd>]</kbd> | dialogo precedente / successivo |
+| <kbd>g</kbd> poi <kbd>w</kbd> / <kbd>s</kbd> / <kbd>h</kbd> / <kbd>,</kbd> | vai a Scrivi / Storia / Manuale / Impostazioni |
+| <kbd>s</kbd> · <kbd>q</kbd> · <kbd>l</kbd> | mostra o nascondi il sottotesto · i controlli a margine · la lente di McKee |
+| <kbd>z</kbd> | modalità concentrazione |
+| <kbd>a</kbd> | apri o chiudi l'Avvocato del diavolo |
+| <kbd>r</kbd> | leggi la scena ad alta voce, o fermati (durante la lettura <kbd>F</kbd> segna la battuta, <kbd>Esc</kbd> ferma) |
+| <kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Ctrl</kbd>+<kbd>Maiusc</kbd>+<kbd>Z</kbd> | annulla / ripeti |
+
 L'apparato completo è a un clic: **Progetto della scena**, **Laboratorio dei beat** e **Copione**.
+
+### Guida
+**Aiuto** nella barra laterale (`#/help`) spiega come si lavora nell'app:
+- un avvio in sei passi;
+- la scrittura rapida e tutte le scorciatoie;
+- una mappa di dove si trova ogni cosa;
+- il metodo di McKee in breve, dalla stessa base di conoscenza del Manuale;
+- le risposte alle domande più comuni (salvataggio, annullare, AI, italiano, altri dispositivi, un controllo che sbaglia).
+
+La finestra delle scorciatoie e la guida nascono da un'unica lista (`public/js/shortcuts.js`), così corrispondono sempre all'app.
 
 ### Cruscotto della storia
 Mezzo (teatro/cinema/televisione/narrativa) e visione (realismo o non realismo, che cambia quanto severamente si giudica il dialogo didascalico, Cap. 8). Poi il valore centrale, l'incidente scatenante e la domanda drammatica principale. Infografiche:

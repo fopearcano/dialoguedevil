@@ -1,5 +1,5 @@
 import { html, useState, useEffect, cx, download, slug } from '../lib.js';
-import { state, setSetting, mutate, act, createAndOpen, removeProject, toast, aiAvailable } from '../store.js';
+import { state, setSetting, mutate, act, createAndOpen, removeProject, toast, aiAvailable, toggleHelp } from '../store.js';
 import { Card, Field, Select, Icon, rich } from '../components/ui.js';
 import { normalizeProject } from '../model.js';
 import { networkInfo } from '../api.js';
@@ -84,6 +84,9 @@ export function SettingsView() {
           ${s.theme === 'terminal' ? html`<span class="field-hint">${tr('A minimal theme: one monospace typeface, green on black, square corners, no shadows.')}</span>` : ''}
         </${Field}>
         <label class="toggle"><input type="checkbox" checked=${s.showSubtext} onChange=${(e) => setSetting('showSubtext', e.currentTarget.checked)} /> ${tr('Show subtext rows in the workshop')}</label>
+        <h4 class="settings-sub">${tr('Writing')}</h4>
+        <label class="toggle"><input type="checkbox" checked=${s.smartPunctuation} onChange=${(e) => setSetting('smartPunctuation', e.currentTarget.checked)} /> ${tr('Smart punctuation: -- becomes an em dash (—), ... an ellipsis (…)')}</label>
+        <p class="small"><button type="button" class="link-btn" onClick=${() => toggleHelp(true)}>${tr('Keyboard shortcuts')}</button> · <a class="link-btn" href="#/help">${tr('Help guide')}</a></p>
       </${Card}>
     </div>
 

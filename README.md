@@ -125,19 +125,51 @@ Where dialogue gets sketched, for one voice or many. Each dialogue is a scene, s
 - **The McKee lens** (side panel): what each voice wants right now and really wants; the checks, with a jump to each flagged line; the value arc and its turning point; how distinct the voices are; and the Devil's Advocate modes (rehearse, suggest beats, diagnose) plus *copy as screenplay*.
 - A rotating prompt under the composer asks the Magic If and the five steps for the current speaker (Ch. 12, 19).
 
-| Keys | In the composer | On a line |
+- **Smart punctuation** as you write: `--` becomes an em dash (a line cut off) and `...` an ellipsis (a line trailing away). It can be turned off in Settings.
+- **Focus mode** (<kbd>z</kbd>, or **Focus** in the toolbar) hides the sidebar and the lens, leaving only the page and the writing box.
+
+#### Keyboard shortcuts
+Press <kbd>?</kbd> anywhere, or <kbd>Ctrl</kbd>+<kbd>/</kbd> even inside a text box, to see them all. On a Mac, <kbd>⌘</kbd> replaces <kbd>Ctrl</kbd>. Single-letter keys work outside text boxes. Inside them the app avoids Alt+letter, which browsers use for their menus. On Linux, some browsers switch tabs with Alt+1…9; there, use <kbd>Tab</kbd> or the voice chips.
+
+| Keys | In the writing box | On a line of the script |
 |---|---|---|
-| <kbd>Enter</kbd> | add the line | open a new line after it |
-| <kbd>Shift</kbd>+<kbd>Enter</kbd> | new line inside the text | new line inside the text |
-| <kbd>Tab</kbd> / <kbd>Shift</kbd>+<kbd>Tab</kbd> | next / previous voice | |
-| <kbd>Alt</kbd>+<kbd>1</kbd>…<kbd>9</kbd>, <kbd>Alt</kbd>+<kbd>0</kbd> | pick a voice, or an action | |
-| <kbd>Ctrl</kbd>+<kbd>Enter</kbd> | add the line as a new beat | |
-| <kbd>↑</kbd> (empty box) | edit the last line | |
+| <kbd>Enter</kbd> | add the line; the turn passes to the next voice | new line after it, for the next voice |
+| <kbd>Alt</kbd>+<kbd>Enter</kbd> | add the line; the same voice goes on | new line after it, for the same voice |
+| <kbd>Ctrl</kbd>+<kbd>Enter</kbd> | add the line as the start of a new beat | start a new beat at this line |
+| <kbd>Shift</kbd>+<kbd>Enter</kbd> | new line inside the speech | new line inside the speech |
+| <kbd>Tab</kbd> | empty box: next voice; with words typed: go under the line (subtext, then action) | go under the line |
+| <kbd>Shift</kbd>+<kbd>Tab</kbd> | previous voice | |
+| <kbd>Alt</kbd>+<kbd>1</kbd>…<kbd>9</kbd> | pick a voice | give the line to that voice |
+| <kbd>Alt</kbd>+<kbd>0</kbd> | write an action | turn the line into an action, or back |
+| <kbd>↑</kbd> / <kbd>↓</kbd> | <kbd>↑</kbd> from the start: edit the last line | at the start / end: go to the line above / below |
 | <kbd>Alt</kbd>+<kbd>↑</kbd> / <kbd>↓</kbd> | | move the line (across beat breaks too) |
-| <kbd>Backspace</kbd> (empty line) | | delete the line |
+| <kbd>Backspace</kbd> | | on an empty line: delete it |
 | <kbd>Esc</kbd> | leave the box (then <kbd>Tab</kbd> moves on) | leave the line |
 
+| Outside a text box | |
+|---|---|
+| <kbd>?</kbd> | the keyboard shortcuts |
+| <kbd>/</kbd> | jump to the writing box |
+| <kbd>n</kbd> | new dialogue |
+| <kbd>[</kbd> / <kbd>]</kbd> | previous / next dialogue |
+| <kbd>g</kbd> then <kbd>w</kbd> / <kbd>s</kbd> / <kbd>h</kbd> / <kbd>,</kbd> | go to Write / Story / Handbook / Settings |
+| <kbd>s</kbd> · <kbd>q</kbd> · <kbd>l</kbd> | show or hide the subtext · the checks in the margin · the McKee lens |
+| <kbd>z</kbd> | focus mode |
+| <kbd>a</kbd> | open or close the Devil's Advocate |
+| <kbd>r</kbd> | read the scene aloud, or stop (during the read, <kbd>F</kbd> flags the line, <kbd>Esc</kbd> stops) |
+| <kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd> | undo / redo |
+
 The full apparatus is one click away: **Scene design**, **Beat workshop** and **Script**.
+
+### Help guide
+**Help** in the sidebar (`#/help`) explains how to work in the app:
+- a six-step start;
+- the quick syntax and every shortcut;
+- a map of where everything is;
+- McKee's method at a glance, from the same knowledge base as the Handbook;
+- answers to common questions (saving, undo, AI, Italian, other devices, a check that is wrong).
+
+The shortcuts overlay and the guide are built from one list (`public/js/shortcuts.js`), so they always match the app.
 
 ### Story dashboard
 Medium (stage/screen/TV/prose) and vision (realism or nonrealism, which changes how strictly on-the-nose dialogue is judged, Ch. 8). Also the core value, inciting incident and major dramatic question. Infographics:

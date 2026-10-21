@@ -4,7 +4,7 @@
 // sitting on every line; the beat workshop keeps the full apparatus.
 
 import { html, useState, useMemo, useRef, useEffect, cx, charColor } from '../lib.js';
-import { state, mutate, act, setSetting, openDrawer, aiAvailable, toast, deskScene } from '../store.js';
+import { state, mutate, act, setSetting, openDrawer, aiAvailable, toast, deskScene, toggleHelp } from '../store.js';
 import { Icon, Cite, TextArea, GerundInput, FindingBadge, SeverityIcon, CharSelect, Meter, rich } from '../components/ui.js';
 import { SceneArc } from '../components/viz.js';
 import { doubleCheckScene, mergeFindings } from '../doublecheck.js';
@@ -18,6 +18,7 @@ import {
 } from '../sketch.js';
 import { addScene } from '../actions.js';
 import { FORMATS } from '../export.js';
+import { smartPunctuation } from '../shortcuts.js';
 import { useTableRead, ReadingBar, toggleFlag } from './workshop.js';
 import { tr, trn } from '../i18n.js';
 
@@ -25,15 +26,23 @@ const kbd = (k) => html`<kbd>${k}</kbd>`;
 const RANK = { info: 1, warning: 2, serious: 3, critical: 4 };
 const snippet = (t, n = 48) => { const s = String(t || '').trim(); return s.length > n ? `${s.slice(0, n - 1)}…` : s; };
 
-// Focus a line's text once the next render has placed it.
-function focusLine(id, end = true) {
+// Focus a line's text once the next render has placed it, with the caret
+// at its end ('end'), its start ('start'), or where it was (null).
+function focusLine(id, caret = 'end') {
   requestAnimationFrame(() => {
     const el = document.querySelector(`#line-${id} .sk-text`);
     if (!el) return;
     el.focus();
-    if (end) el.setSelectionRange(el.value.length, el.value.length);
+    if (caret === 'end') el.setSelectionRange(el.value.length, el.value.length);
+    if (caret === 'start') el.setSelectionRange(0, 0);
   });
 }
+
+const atStart = (el) => el.selectionStart === 0 && el.selectionEnd === 0;
+const atEnd = (el) => el.selectionStart === el.value.length && el.selectionEnd === el.value.length;
+const tidy = (t) => (state.settings.smartPunctuation ? smartPunctuation(t) : t);
+// Alt+1…9 picks a voice, Alt+0 an action; on any keyboard layout.
+const altDigit = (e) => (e.altKey && !e.ctrlKey && !e.metaKey && /^Digit\d$/.test(e.code) ? Number(e.code.slice(5)) : null);
 
 const focusComposer = () => requestAnimationFrame(() => document.querySelector('.desk-composer .entry-text')?.focus());
 
@@ -86,6 +95,7 @@ function Desk({ s }) {
   const speech = speechLines(s);
   const words = speech.reduce((n, l) => n + (l.text.trim() ? l.text.trim().split(/\s+/).length : 0), 0);
   const multi = s.beats.length > 1;
+  const lensOn = set.lensOpen && !set.focusMode;
   const openLine = (id) => {
     setOpenNotes(id);
     requestAnimationFrame(() => document.getElementById(`line-${id}`)?.scrollIntoView({ block: 'center', behavior: 'smooth' }));
@@ -99,12 +109,13 @@ function Desk({ s }) {
   });
   return html`<div class="desk" lang=${p.lang}>
     <${DeskHead} s=${s} />
-    <div class=${cx('desk-grid', set.lensOpen && 'with-lens')}>
+    <div class=${cx('desk-grid', lensOn && 'with-lens')}>
       <div class="desk-main">
         <div class="desk-toolbar">
           <label class="toggle small" title=${tr('Show the subtext and the action under each line')}><input type="checkbox" checked=${view.iceberg} onChange=${(e) => setSetting('showSubtext', e.currentTarget.checked)} /> <${Icon} name="layers" /> ${tr('Subtext')}</label>
           <label class="toggle small" title=${tr('Sketch first, judge later: hide the checks while drafting')}><input type="checkbox" checked=${!view.quiet} onChange=${(e) => setSetting('quietChecks', !e.currentTarget.checked)} /> ${tr('Checks in the margin')}</label>
-          <button type="button" class="btn btn-quiet btn-small" disabled=${!speech.length} onClick=${() => (reader.cur ? reader.stop() : reader.start())}><${Icon} name=${reader.cur ? 'stop' : 'play'} /> ${reader.cur ? tr('Stop') : tr('Read aloud')}</button>
+          <button type="button" class="btn btn-quiet btn-small" disabled=${!speech.length} title=${tr('Read aloud (r)')} onClick=${() => (reader.cur ? reader.stop() : reader.start())}><${Icon} name=${reader.cur ? 'stop' : 'play'} /> ${reader.cur ? tr('Stop') : tr('Read aloud')}</button>
+          <button type="button" class=${cx('btn btn-quiet btn-small', set.focusMode && 'active')} aria-pressed=${set.focusMode} title=${tr('Focus mode: only the page and the writing box (z)')} onClick=${() => setSetting('focusMode', !set.focusMode)}><${Icon} name="focus" /> ${tr('Focus')}</button>
           <span class="grow"></span>
           <span class="muted small">${trn(speech.length, '{n} line', '{n} lines')} · ${trn(words, '{n} word', '{n} words')}${multi ? ` · ${trn(s.beats.length, '{n} beat', '{n} beats')}` : ''}</span>
         </div>
@@ -112,7 +123,7 @@ function Desk({ s }) {
         ${reader.cur ? html`<${ReadingBar} s=${s} reader=${reader} />` : ''}
         <${DeskComposer} s=${s} cast=${cast} quiet=${view.quiet} iceberg=${view.iceberg} />
       </div>
-      ${set.lensOpen ? html`<aside class="lens" aria-label=${tr('McKee lens')}><${Lens} s=${s} analysis=${analysis} cast=${cast} turning=${turning} openLine=${openLine} /></aside>` : ''}
+      ${lensOn ? html`<aside class="lens" aria-label=${tr('McKee lens')}><${Lens} s=${s} analysis=${analysis} cast=${cast} turning=${turning} openLine=${openLine} /></aside>` : ''}
     </div>
   </div>`;
 }
@@ -149,6 +160,7 @@ function SheetGuide({ s, cast }) {
       <li>${rich('{cue} picks the speaker; a new name in capitals creates the character.', { cue: html`<code>${tr('NAME: line')}</code>` })}</li>
       <li>${rich('{paren} adds paralanguage, {action} an action, {beat} a beat break.', { paren: html`<code>${tr('(softly)')}</code>`, action: html`<code>${tr('[She leaves.]')}</code>`, beat: html`<code>---</code>` })}</li>
       <li>${tr('Paste a whole scene (NAME: line, or a screenplay) to bring it in.')}</li>
+      <li>${rich('{key} shows every shortcut; the Help page explains the rest.', { key: kbd('?') })} <a class="link-btn" href="#/help">${tr('Help')}</a></li>
     </ul>
     ${track ? html`<p class="small muted"><strong>${track.name}.</strong> ${track.desc} <${Cite} ch=${1} /></p>` : ''}
     <p class="magic-if">${tr('Before writing a line, ask: what does each character want out of this situation? What action would she take, right now, to get it? Only then: what exact words?')} <${Cite} ch=${2} /></p>
@@ -219,29 +231,76 @@ function SketchLine({ s, line: l, findings, view }) {
   const starts = locateLine(s, l.id)?.lineIndex === 0;
   const name = c?.name || tr('the character');
   const order = s.beats.flatMap((b) => b.lines);
-  const prevId = order[order.findIndex((x) => x.id === l.id) - 1]?.id;
+  const at = order.findIndex((x) => x.id === l.id);
+  const prevId = order[at - 1]?.id;
+  const nextId = order[at + 1]?.id;
+  const focusUnder = () => requestAnimationFrame(() => document.querySelector(`#line-${l.id} .sk-subtext`)?.focus());
 
   const onKey = (e) => {
     if (e.isComposing) return;
-    if (e.key === 'Enter' && !e.shiftKey && !e.altKey) {
+    const plain = !e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey;
+    const digit = altDigit(e);
+    if (e.key === 'Enter' && !e.shiftKey && (e.ctrlKey || e.metaKey)) {
+      // This line opens a new beat.
       e.preventDefault();
-      const nl = newLine({ speaker: voiceAfter(view.cast, s, l.id) || l.speaker || view.cast[0] || '' });
+      editScene(s.id, (sc) => splitBeatAt(sc, l.id));
+      focusLine(l.id, null);
+    } else if (e.key === 'Enter' && !e.shiftKey) {
+      // A new line after this one: the next voice, or with Alt the same one.
+      e.preventDefault();
+      const same = e.altKey && !isAction && l.speaker;
+      const nl = newLine({ speaker: same ? l.speaker : voiceAfter(view.cast, s, l.id) || l.speaker || view.cast[0] || '' });
       editScene(s.id, (sc) => insertLineAfter(sc, l.id, nl));
       focusLine(nl.id);
-    } else if (e.key === 'Backspace' && !l.text && !l.paren && e.currentTarget.selectionStart === 0) {
+    } else if (e.key === 'Backspace' && !l.text && !l.paren && atStart(e.currentTarget)) {
       e.preventDefault();
       editScene(s.id, (sc) => removeLine(sc, l.id));
       if (prevId) focusLine(prevId);
     } else if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
       e.preventDefault();
       editScene(s.id, (sc) => moveLine(sc, l.id, e.key === 'ArrowUp' ? -1 : 1));
-      focusLine(l.id, false);
+      focusLine(l.id, null);
+    } else if (plain && e.key === 'ArrowUp' && atStart(e.currentTarget) && prevId) {
+      e.preventDefault();
+      focusLine(prevId, 'end');
+    } else if (plain && e.key === 'ArrowDown' && atEnd(e.currentTarget)) {
+      e.preventDefault();
+      if (nextId) focusLine(nextId, 'start');
+      else focusComposer();
+    } else if (digit != null) {
+      // Alt+1…9 gives the line to a voice; Alt+0 turns it into an action and back.
+      const who = digit ? view.cast[digit - 1] : '';
+      if (digit && !who) return;
+      e.preventDefault();
+      editScene(s.id, (sc) => {
+        const x = locateLine(sc, l.id)?.line;
+        if (!x) return;
+        if (!digit) {
+          x.kind = x.kind === 'action' ? 'line' : 'action';
+          if (x.kind === 'line' && !x.speaker) x.speaker = voiceAfter(view.cast, sc, l.id) || view.cast[0] || '';
+        } else {
+          x.kind = 'line';
+          x.speaker = who;
+        }
+      });
+      focusLine(l.id, null);
+    } else if (e.key === 'Tab' && plain && !isAction && !view.iceberg && !under) {
+      // Under the line: open the subtext row first.
+      e.preventDefault();
+      setUnder(true);
+      focusUnder();
     } else if (e.key === 'Escape') e.currentTarget.blur();
   };
-  // "(softly) words" typed into a line moves the paralanguage to its place.
+  // Enter or Esc in the subtext or the action returns to the words.
+  const backToLine = (e) => {
+    if ((e.key === 'Enter' && !e.shiftKey) || e.key === 'Escape') { e.preventDefault(); focusLine(l.id, 'end'); }
+  };
+  // On leaving a line: "(softly) words" moves the paralanguage to its place,
+  // and -- / ... become a dash and an ellipsis.
   const onBlur = () => {
     const m = !isAction && l.text.match(/^\(([^)\n]+)\)\s*([\s\S]+)$/);
-    if (m) mutate(() => { l.paren = [l.paren, m[1].trim()].filter(Boolean).join(', '); l.text = m[2].trim(); });
+    const text = tidy(m ? m[2].trim() : l.text);
+    if (m || text !== l.text) mutate(() => { if (m) l.paren = [l.paren, m[1].trim()].filter(Boolean).join(', '); l.text = text; });
   };
   const cast = view.cast;
   const others = p.characters.filter((x) => !cast.includes(x.id));
@@ -261,8 +320,8 @@ function SketchLine({ s, line: l, findings, view }) {
         placeholder=${isAction ? tr('An action, a gesture, a silence…') : tr('What does {name} say?', { name })}
         aria-label=${isAction ? tr('Action') : tr('Line by {name}', { name })} />
       ${!isAction && (view.iceberg || under) ? html`<div class=${cx('sk-under', (hasUnder || under) && 'filled')}>
-        <${TextArea} value=${l.subtext} onInput=${set('subtext')} rows=${1} class="sk-subtext" placeholder=${tr('Subtext · the unsaid')} aria-label=${tr('Subtext')} />
-        <${GerundInput} value=${l.tactic} onInput=${set('tactic')} placeholder=${tr('Action (gerund)')} aria-label=${tr('Action (gerund)')} />
+        <${TextArea} value=${l.subtext} onInput=${set('subtext')} onKeyDown=${backToLine} rows=${1} class="sk-subtext" placeholder=${tr('Subtext · the unsaid')} aria-label=${tr('Subtext')} />
+        <${GerundInput} value=${l.tactic} onInput=${set('tactic')} onKeyDown=${backToLine} placeholder=${tr('Action (gerund)')} aria-label=${tr('Action (gerund)')} />
       </div>` : ''}
       ${open ? html`<div class="line-flags">${notes.map((f) => html`<${FindingBadge} f=${f}
         onDismiss=${(flaw) => act(() => { if (!l.dismissed.includes(flaw)) l.dismissed.push(flaw); })}
@@ -377,9 +436,10 @@ function DeskComposer({ s, cast, quiet, iceberg }) {
     ]).filter((f) => f.flaw !== 'noSubtext' && f.status !== 'good');
   }, [text, tactic, subtext, speaker, quiet, action, p.lang, state.settings.lang]);
 
-  const submit = (startBeat = false) => {
+  // startBeat: the line opens a new beat; sameVoice: the speaker keeps the turn.
+  const submit = (startBeat = false, { sameVoice = false } = {}) => {
     let e = action
-      ? (text.trim() ? { kind: 'action', text: text.trim().replace(/^\[([\s\S]*)\]$/, '$1').trim() } : null)
+      ? (text.trim() ? { kind: 'action', text: tidy(text.trim().replace(/^\[([\s\S]*)\]$/, '$1').trim()) } : null)
       : parseEntry(text, p.characters);
     if (!e) {
       if (startBeat) editScene(s.id, (sc, proj) => addEntries(proj, sc, [{ kind: 'beat' }]));
@@ -387,7 +447,7 @@ function DeskComposer({ s, cast, quiet, iceberg }) {
     }
     if (e.kind === 'line') {
       if (!e.id && !e.newName && !speaker) { setAdding(true); toast(tr('Who says it? Add a voice, or type NAME: line.')); return; }
-      e = { ...e, subtext: subtext.trim(), tactic: tactic.trim() };
+      e = { ...e, text: tidy(e.text), subtext: tidy(subtext.trim()), tactic: tactic.trim() };
     }
     let r;
     editScene(s.id, (sc, proj) => { r = addEntries(proj, sc, [e], { speaker, newBeat: startBeat }); });
@@ -396,7 +456,7 @@ function DeskComposer({ s, cast, quiet, iceberg }) {
     const spoke = r.lines[0] && r.lines[0].kind !== 'action' ? r.lines[0].speaker : '';
     if (spoke) {
       const sc = sceneById(state.project, s.id);
-      setSpeaker(nextSpeaker(sc.participants.map((x) => x.characterId), sc, spoke));
+      setSpeaker(sameVoice ? spoke : nextSpeaker(sc.participants.map((x) => x.characterId), sc, spoke));
     }
     requestAnimationFrame(() => {
       const m = document.querySelector('main');
@@ -404,25 +464,30 @@ function DeskComposer({ s, cast, quiet, iceberg }) {
       focus();
     });
   };
+  const enter = (e) => { e.preventDefault(); submit(e.ctrlKey || e.metaKey, { sameVoice: e.altKey }); };
   const onKey = (e) => {
     if (e.isComposing) return;
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(e.ctrlKey || e.metaKey); return; }
-    if (e.key === 'Tab' && !e.altKey && !e.ctrlKey && !e.metaKey && cast.length) {
+    if (e.key === 'Enter' && !e.shiftKey) { enter(e); return; }
+    if (e.key === 'Tab' && !e.altKey && !e.ctrlKey && !e.metaKey) {
+      // With words typed, Tab goes under the line (subtext, then action).
+      if (!e.shiftKey && text.trim() && iceberg && !action) return;
+      if (!cast.length) return;
       e.preventDefault();
       setAction(false);
       setSpeaker(cycleSpeaker(cast, speaker, e.shiftKey ? -1 : 1));
       return;
     }
-    if (e.altKey && /^Digit\d$/.test(e.code)) {
+    const digit = altDigit(e);
+    if (digit != null) {
       e.preventDefault();
-      const k = Number(e.code.slice(5));
-      if (k === 0) setAction(true);
-      else if (cast[k - 1]) { setAction(false); setSpeaker(cast[k - 1]); }
+      if (digit === 0) setAction(true);
+      else if (cast[digit - 1]) { setAction(false); setSpeaker(cast[digit - 1]); }
       return;
     }
-    if (e.key === 'ArrowUp' && !text) {
+    if (e.key === 'ArrowUp' && !e.altKey && !e.shiftKey && (!text || atStart(e.currentTarget))) {
       const all = document.querySelectorAll('.sheet .sk-text');
-      if (all.length) { e.preventDefault(); all[all.length - 1].focus(); }
+      const last = all[all.length - 1];
+      if (last) { e.preventDefault(); last.focus(); last.setSelectionRange(last.value.length, last.value.length); }
       return;
     }
     if (e.key === 'Escape') e.currentTarget.blur();
@@ -453,7 +518,7 @@ function DeskComposer({ s, cast, quiet, iceberg }) {
       <button type="button" class=${cx('chip-btn', action && 'active')} aria-pressed=${action} title=${tr('A stage direction, gesture or silence (Alt+0)')} onClick=${() => { setAction(!action); focus(); }}>${tr('Action')}</button>
       <button type="button" class=${cx('chip-btn', adding && 'active')} aria-expanded=${adding} onClick=${() => setAdding(!adding)}>+ ${tr('Voice')}</button>
       <span class="grow"></span>
-      ${cast.length > 1 ? html`<span class="small muted cast-hint">${rich('{tab} next voice', { tab: kbd('Tab') })}</span>` : ''}
+      <span class="small muted cast-hint">${cast.length > 1 ? html`${rich('{tab} next voice', { tab: kbd('Tab') })} · ` : ''}<button type="button" class="link-btn small" onClick=${() => toggleHelp(true)}>${rich('{key} shortcuts', { key: kbd('?') })}</button></span>
     </div>
     ${adding ? html`<${CastAdder} s=${s} cast=${cast} onPick=${(id) => { setSpeaker(id); setAction(false); setAdding(false); focus(); }} onDone=${() => setAdding(false)} />` : ''}
     <div class="entry">
@@ -464,9 +529,9 @@ function DeskComposer({ s, cast, quiet, iceberg }) {
     </div>
     ${iceberg && !action ? html`<div class="entry-under">
       <input class="input" value=${subtext} placeholder=${tr('Subtext: what she thinks and feels but won\'t say')} aria-label=${tr('Subtext')} onInput=${(e) => setSubtext(e.currentTarget.value)}
-        onKeyDown=${(e) => { if (e.key === 'Enter') { e.preventDefault(); submit(e.ctrlKey || e.metaKey); } }} />
+        onKeyDown=${(e) => { if (e.key === 'Enter') enter(e); if (e.key === 'Escape') focus(); }} />
       <${GerundInput} value=${tactic} onInput=${setTactic} placeholder=${tr('Action (gerund): testing, cornering…')} aria-label=${tr('Action (gerund)')}
-        onKeyDown=${(e) => { if (e.key === 'Enter') { e.preventDefault(); submit(e.ctrlKey || e.metaKey); } }} />
+        onKeyDown=${(e) => { if (e.key === 'Enter') enter(e); if (e.key === 'Escape') focus(); }} />
     </div>` : ''}
     ${draftFindings.length ? html`<div class="line-flags">${draftFindings.map((f) => html`<${FindingBadge} f=${f} />`)}</div>` : ''}
     <div class="entry-foot">
