@@ -40,6 +40,11 @@ Dialogue Devil is running.
 | `DD_DATA_DIR` | `./data/projects` | Where projects are saved (one JSON file each) |
 | `ANTHROPIC_API_KEY` | (unset) | Enables the AI collaborator for everyone using this server |
 | `DD_MODEL` | `claude-opus-5-5` | Default Claude model |
+| `DD_AI_PROVIDER` | `anthropic` | AI service a new browser starts with: `anthropic`, `openai`, `openrouter` or `local` |
+| `OPENAI_API_KEY`, `OPENAI_MODEL`, `OPENAI_BASE_URL` | (unset) | OpenAI key, default model, and an optional address (a proxy or an OpenAI-compatible gateway) |
+| `OPENROUTER_API_KEY`, `OPENROUTER_MODEL`, `OPENROUTER_BASE_URL` | (unset) | The same for OpenRouter |
+| `DD_LOCAL_AI_URL`, `DD_LOCAL_AI_MODEL`, `DD_LOCAL_AI_KEY` | `http://localhost:11434/v1` | Local / OpenAI-compatible server: its address (Ollama's by default), default model, optional key |
+| `DD_ALLOW_REMOTE_AI_URL` | (unset) | `1` lets any device set a custom local-server address (see below) |
 | `DD_AI_MOCK` | (unset) | `1` = canned AI responses for offline UI development and demos |
 | `DD_LANG` | from `LANG` | `en` or `it`: language of the console messages and of the first-run sample. The app itself follows each browser. |
 
@@ -57,7 +62,8 @@ Every device works on the same projects:
 Security defaults:
 - Only devices on your local network can connect. That means private addresses (10.x, 172.16–31.x, 192.168.x, and VPN ranges such as Tailscale's 100.64/10), plus devices on this computer's own subnet, for networks that use public addresses internally. The check uses the connection's real address; `X-Forwarded-For` is ignored.
 - Without `DD_ACCESS_CODE`, anyone on your network can open your projects, and can use the server's `ANTHROPIC_API_KEY` if one is set. On shared networks, set an access code. The server prints a reminder when a key is set without one.
-- An API key typed into Settings stays in that one browser. Each device that should use AI needs its own key, or set `ANTHROPIC_API_KEY` on the server.
+- An API key typed into Settings stays in that one browser. Each device that should use AI needs its own key, or set the service's key (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `OPENROUTER_API_KEY`) on the server.
+- A custom **local AI server address** makes the server fetch that address, so it is accepted from this computer, or from other devices once an access code is set. Otherwise other devices use the server's `DD_LOCAL_AI_URL`. `DD_ALLOW_REMOTE_AI_URL=1` lifts the rule.
 - `DD_ALLOW_PUBLIC=1` exposes the app to anyone who can reach the port. Traffic is plain HTTP. If you need access from outside your network, use a VPN such as Tailscale instead, or put the app behind an HTTPS reverse proxy *and* set an access code.
 
 ## Italian version
@@ -278,9 +284,24 @@ In **Settings → Appearance → Theme**, *System* follows the device (light or 
 
 ## AI setup (optional)
 
-Either start the server with `ANTHROPIC_API_KEY` set, or paste a key into **Settings**. A key entered in Settings stays in that browser's local storage and is sent to your own Dialogue Devil server with each AI request, which uses it for that request only and never writes it to disk.
+In **Settings → AI collaborator**, pick a **service**:
 
-Under the hood, `server/ai.js` uses the official `@anthropic-ai/sdk`:
+| Service | What you need | Model |
+|---|---|---|
+| **Anthropic (Claude)**, the default | an Anthropic API key | chosen from the list; Claude Opus 5.5 by default |
+| **OpenAI** | an OpenAI API key | typed in, or picked from **Load models** |
+| **OpenRouter** | an OpenRouter key | `provider/model`, typed in or picked from the list |
+| **Local / compatible** | a server with an OpenAI-compatible API: Ollama, LM Studio, llama.cpp, vLLM, or any other. A key only if the server asks for one. | picked from the models the server has loaded |
+
+Paste the key into Settings, or set it on the server (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `OPENROUTER_API_KEY`). A key entered in Settings stays in that browser's local storage. It is sent to your own Dialogue Devil server with each AI request, which uses it for that request only and never writes it to disk. Each service keeps its own key and model, so switching back and forth loses nothing. **Test connection** lists the service's models, which checks the key and the address without spending tokens.
+
+**Local models.** Start the local server (for example `ollama serve` with a model pulled, or LM Studio's local server). Choose its preset (Ollama `:11434`, LM Studio `:1234`, llama.cpp `:8080`, vLLM `:8000`) or type its address, then load the models and pick one. "localhost" means the computer running Dialogue Devil, even when you are on a phone. Two things matter:
+- **Tool calling.** The coach's proposals, the beats, the line lab and the AI double-check arrive as tool calls. A model without tool calling can still talk, and the app says so, but it can't make proposals.
+- **Context length.** The McKee framework alone is about 6k tokens, so give the model at least 16k. Ollama and LM Studio often start with less, and a shorter window cuts the framework off. For local servers the project context sent with each request is also capped at about 6k tokens.
+
+The prompts were written and tested with Claude; other models may follow the method less closely.
+
+Under the hood, `server/ai.js` uses the official `@anthropic-ai/sdk` for Claude:
 - A streaming tool-use loop over the Messages API, with text streamed to the browser over server-sent events.
 - Proposal tools validated with zod before they reach the UI.
 - Eager input streaming on tools.
@@ -289,11 +310,15 @@ Under the hood, `server/ai.js` uses the official `@anthropic-ai/sdk`:
 
 The default model is Claude Opus 5.5; Settings offers Sonnet 5.5, Haiku 5.5 and Fable 5.1.
 
+The other services go through `server/providers.js`. It calls the Chat Completions HTTP API directly, the format all of them share, with no extra SDK. It runs the same loop: text streamed to the browser, the same proposal tools sent as functions and validated with the same schemas, tool results sent back. Review and rehearsal force their tool (`tool_choice`). If a model refuses tools, the loop steps down and carries on without them. Errors name the cause: a rejected key, an unknown model or address, an unreachable server, a context window that is too small.
+
 ## Project layout
 
 ```
 server.js               Express app: static UI, project REST API, AI SSE endpoint (port 4134)
-server/ai.js            Claude agent loop, tool validation, error mapping, mock mode
+server/ai.js            Claude agent loop, provider dispatch, error mapping, mock mode
+server/providers.js     OpenAI, OpenRouter and local/OpenAI-compatible services: tool loop, model lists, address rule
+server/tools.js         Proposal tool schemas, shared by every service
 server/prompts.js       System prompt (built from the knowledge base) and tool definitions
 server/storage.js       JSON file storage, one file per project, with revisions and per-project save locks
 server/network.js       LAN guard (private addresses only), optional access code, network addresses
@@ -334,7 +359,8 @@ The suites cover:
 - the REST API, including revision conflicts and concurrent saves;
 - the themes: the terminal and dark themes define every color token, so nothing falls back to light values;
 - the LAN guard and access code;
-- the AI tool-use loop, including the review report and the Italian framework and language instructions. The loop runs offline against a local fake of the Messages API streaming endpoint.
+- the AI tool-use loop, including the review report and the Italian framework and language instructions. The loop runs offline against a local fake of the Messages API streaming endpoint;
+- the other AI services, against a fake Chat Completions server. The tests cover streamed text and tool calls split across chunks, the follow-up turn, the forced review tool, a model without tools, a server that answers with plain JSON, bearer keys and the model list, readable errors, and the rule for custom addresses.
 
 ## About the source
 

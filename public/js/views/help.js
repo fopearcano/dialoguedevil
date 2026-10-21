@@ -119,7 +119,7 @@ function Faq() {
   const qa = [
     [tr('Is my work saved?'), tr('Yes, automatically, on the computer running Dialogue Devil (one file per project in data/projects). This browser also keeps a copy until the server confirms each save.')],
     [tr('Can I undo?'), rich('{undo} and {redo}, outside text boxes, undo and redo any change, including the ones the AI made.', { undo: k('Ctrl+Z'), redo: k('Ctrl+Shift+Z') })],
-    [tr('Do I need the AI?'), tr('No. Writing, the checks, the interview, the handbook and the exports all work offline. Add an API key in Settings to turn on the AI modes.')],
+    [tr('Do I need the AI?'), tr('No. Writing, the checks, the interview, the handbook and the exports all work offline. To turn on the AI modes, add a key for Anthropic, OpenAI or OpenRouter in Settings, or connect a model running on your own computer (Ollama, LM Studio…).')],
     [tr('Can I write in Italian?'), tr('Yes. Settings → Language sets the interface and, separately, the language of each project\'s dialogue, which decides the analysis rules.')],
     [tr('Can I use it on a phone or tablet?'), tr('Yes, from any device on the same network: Settings → Other devices shows the address to open.')],
     [tr('A check is wrong. What do I do?'), tr('Open the note in the margin and choose “Dismiss as deliberate”: it is remembered for that line. Notes marked “to verify” come from one sensitive check only.')],

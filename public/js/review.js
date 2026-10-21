@@ -4,7 +4,7 @@
 // they go stale line by line as the writer revises.
 
 import { streamChat } from './api.js';
-import { state, act } from './store.js';
+import { state, act, aiRequest, aiConfig } from './store.js';
 import { doubleCheckScene, lineHash } from './doublecheck.js';
 import { flattenLines } from './analysis.js';
 import { sceneForAI, projectMeta, fullChar, analyzerSummary } from './aicontext.js';
@@ -31,12 +31,16 @@ export async function runAiReview(sceneId, { onText, signal } = {}) {
   };
   let report = null;
   let error = '';
+  const { apiKey, ...service } = aiRequest();
+  const svc = aiConfig();
+  // Which model wrote the review, e.g. "claude-opus-5-5" or "OpenRouter: x/y".
+  const reviewer = svc.provider === 'anthropic' ? svc.model || svc.defaultModel : `${svc.label}: ${svc.model || svc.defaultModel}`;
   await streamChat({
-    apiKey: state.settings.apiKey || undefined,
+    apiKey,
     signal,
     body: {
       mode: 'review',
-      model: state.settings.model || undefined,
+      ...service,
       lang: getLang(),
       dialogueLang: p.lang,
       messages: [{ role: 'user', content: 'Double-check this scene: report what the analyzer missed and dispute its false alarms.' }],
@@ -56,7 +60,7 @@ export async function runAiReview(sceneId, { onText, signal } = {}) {
     if (!s) return;
     s.review = {
       at: new Date().toISOString(),
-      model: state.settings.model || state.ai?.defaultModel || '',
+      model: reviewer,
       hashes,
       summary: report.summary || '',
       issues: (report.issues || []).filter(keep).map((i) => ({ lineId: i.line_id || '', flaw: i.flaw, severity: i.severity, evidence: i.evidence || '', note: i.note, fix: i.fix || '' })),

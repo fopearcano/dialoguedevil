@@ -46,6 +46,11 @@ Dialogue Devil è in funzione.
 | `DD_DATA_DIR` | `./data/projects` | Dove vengono salvati i progetti (un file JSON ciascuno) |
 | `ANTHROPIC_API_KEY` | (non impostato) | Attiva il collaboratore AI per chiunque usi questo server |
 | `DD_MODEL` | `claude-opus-5-5` | Modello Claude predefinito |
+| `DD_AI_PROVIDER` | `anthropic` | Servizio AI con cui parte un nuovo browser: `anthropic`, `openai`, `openrouter` o `local` |
+| `OPENAI_API_KEY`, `OPENAI_MODEL`, `OPENAI_BASE_URL` | (non impostato) | Chiave OpenAI, modello predefinito e un indirizzo facoltativo (un proxy o un gateway compatibile con OpenAI) |
+| `OPENROUTER_API_KEY`, `OPENROUTER_MODEL`, `OPENROUTER_BASE_URL` | (non impostato) | Lo stesso per OpenRouter |
+| `DD_LOCAL_AI_URL`, `DD_LOCAL_AI_MODEL`, `DD_LOCAL_AI_KEY` | `http://localhost:11434/v1` | Server locale / compatibile con OpenAI: indirizzo (quello di Ollama per default), modello predefinito, chiave facoltativa |
+| `DD_ALLOW_REMOTE_AI_URL` | (non impostato) | `1` permette a qualsiasi dispositivo di impostare un indirizzo personalizzato del server locale (vedi sotto) |
 | `DD_AI_MOCK` | (non impostato) | `1` = risposte AI simulate, per lavorare offline e fare dimostrazioni |
 | `DD_LANG` | da `LANG` | `it` o `en`: lingua della console e del progetto d'esempio creato al primo avvio. L'app segue la lingua di ciascun browser. |
 
@@ -63,7 +68,8 @@ Tutti i dispositivi lavorano sugli stessi progetti:
 Sicurezza predefinita:
 - Possono collegarsi solo i dispositivi della rete locale: indirizzi privati (10.x, 172.16–31.x, 192.168.x e reti VPN come quella di Tailscale, 100.64/10), più i dispositivi della sottorete di questo computer, per le reti che usano internamente indirizzi pubblici. Il controllo usa l'indirizzo reale della connessione; `X-Forwarded-For` viene ignorato.
 - Senza `DD_ACCESS_CODE` chiunque sia sulla tua rete può aprire i tuoi progetti, e usare la `ANTHROPIC_API_KEY` del server se è impostata. Sulle reti condivise imposta un codice d'accesso. Il server lo ricorda all'avvio quando trova una chiave senza codice.
-- Una chiave API inserita nelle Impostazioni resta in quel solo browser. Ogni dispositivo che deve usare l'AI ha bisogno della sua chiave, oppure imposta `ANTHROPIC_API_KEY` sul server.
+- Una chiave API inserita nelle Impostazioni resta in quel solo browser. Ogni dispositivo che deve usare l'AI ha bisogno della sua chiave, oppure imposta sul server la chiave del servizio (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `OPENROUTER_API_KEY`).
+- Un **indirizzo personalizzato del server AI locale** fa sì che il server contatti quell'indirizzo. Per questo è accettato da questo computer, o dagli altri dispositivi dopo aver impostato un codice d'accesso. Altrimenti gli altri dispositivi usano il `DD_LOCAL_AI_URL` del server. `DD_ALLOW_REMOTE_AI_URL=1` toglie la regola.
 - `DD_ALLOW_PUBLIC=1` espone l'app a chiunque raggiunga la porta, e il traffico è HTTP in chiaro. Se ti serve l'accesso da fuori, usa piuttosto una VPN come Tailscale, oppure metti l'app dietro un reverse proxy HTTPS *e* imposta un codice d'accesso.
 
 ## La versione italiana
@@ -264,9 +270,24 @@ In **Impostazioni → Aspetto → Tema**, *Sistema* segue il dispositivo (chiaro
 
 ## Configurare l'AI (facoltativo)
 
-Avvia il server con `ANTHROPIC_API_KEY` impostata, oppure incolla una chiave nelle **Impostazioni**. Una chiave inserita nelle Impostazioni resta nella memoria locale di quel browser e viene inviata al tuo server Dialogue Devil a ogni richiesta AI; il server la usa solo per quella richiesta e non la scrive mai su disco.
+In **Impostazioni → Collaboratore AI** scegli un **servizio**:
 
-Dietro le quinte, `server/ai.js` usa l'SDK ufficiale `@anthropic-ai/sdk`:
+| Servizio | Che cosa serve | Modello |
+|---|---|---|
+| **Anthropic (Claude)**, il predefinito | una chiave API di Anthropic | scelto dall'elenco; Claude Opus 5.5 per default |
+| **OpenAI** | una chiave API di OpenAI | scritto a mano, o scelto con **Carica i modelli** |
+| **OpenRouter** | una chiave di OpenRouter | `fornitore/modello`, scritto a mano o scelto dall'elenco |
+| **Locale / compatibile** | un server con un'API compatibile con OpenAI: Ollama, LM Studio, llama.cpp, vLLM o qualsiasi altro. Una chiave solo se il server la chiede. | scelto tra i modelli caricati nel server |
+
+Incolla la chiave nelle Impostazioni, oppure impostala sul server (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `OPENROUTER_API_KEY`). Una chiave inserita nelle Impostazioni resta nella memoria locale di quel browser. Viene inviata al tuo server Dialogue Devil a ogni richiesta AI; il server la usa solo per quella richiesta e non la scrive mai su disco. Ogni servizio tiene la sua chiave e il suo modello, quindi passare dall'uno all'altro non fa perdere niente. **Verifica la connessione** elenca i modelli del servizio: così controlla chiave e indirizzo senza spendere token.
+
+**Modelli locali.** Avvia il server locale (per esempio `ollama serve` con un modello scaricato, o il server locale di LM Studio). Scegli il suo preset (Ollama `:11434`, LM Studio `:1234`, llama.cpp `:8080`, vLLM `:8000`) o scrivi il suo indirizzo, poi carica i modelli e scegline uno. "localhost" indica il computer su cui gira Dialogue Devil, anche quando sei su un telefono. Contano due cose:
+- **Chiamata di strumenti.** Le proposte del coach, i beat, il laboratorio battute e il doppio controllo AI arrivano come chiamate di strumenti (tool calling). Un modello senza questa capacità può comunque conversare, e l'app lo segnala, ma non può fare proposte.
+- **Lunghezza del contesto.** Il solo quadro di McKee occupa circa 6k token, quindi dai al modello almeno 16k. Ollama e LM Studio partono spesso con meno, e una finestra più corta taglia il quadro. Per i server locali anche il contesto del progetto inviato a ogni richiesta è limitato a circa 6k token.
+
+I prompt sono stati scritti e provati con Claude; altri modelli possono seguire il metodo con meno precisione.
+
+Dietro le quinte, per Claude `server/ai.js` usa l'SDK ufficiale `@anthropic-ai/sdk`:
 - un ciclo di tool use in streaming sulla Messages API, con il testo inviato al browser tramite server-sent events;
 - strumenti di proposta validati con zod prima di arrivare all'interfaccia;
 - streaming anticipato degli input degli strumenti;
@@ -275,11 +296,15 @@ Dietro le quinte, `server/ai.js` usa l'SDK ufficiale `@anthropic-ai/sdk`:
 
 Il modello predefinito è Claude Opus 5.5; le Impostazioni offrono anche Sonnet 5.5, Haiku 5.5 e Fable 5.1.
 
+Gli altri servizi passano da `server/providers.js`. Chiama direttamente l'API HTTP Chat Completions, il formato che hanno tutti in comune, senza altri SDK. Fa girare lo stesso ciclo: testo in streaming verso il browser, gli stessi strumenti di proposta inviati come funzioni e validati con gli stessi schemi, i risultati degli strumenti rimandati indietro. La revisione e la prova impongono il loro strumento (`tool_choice`). Se un modello rifiuta gli strumenti, il ciclo fa un passo indietro e prosegue senza. Gli errori dicono la causa: chiave rifiutata, modello o indirizzo sconosciuti, server irraggiungibile, finestra di contesto troppo piccola.
+
 ## Struttura del progetto
 
 ```
 server.js               App Express: interfaccia statica, API REST dei progetti, endpoint AI in SSE (porta 4134)
-server/ai.js            Ciclo dell'agente Claude, validazione degli strumenti, errori, modalità simulata
+server/ai.js            Ciclo dell'agente Claude, scelta del servizio, errori, modalità simulata
+server/providers.js     OpenAI, OpenRouter e servizi locali/compatibili con OpenAI: ciclo degli strumenti, elenco modelli, regola degli indirizzi
+server/tools.js         Schemi degli strumenti di proposta, condivisi da tutti i servizi
 server/prompts.js       Prompt di sistema (costruito dalla base di conoscenza) e definizione degli strumenti
 server/storage.js       Archivio su file JSON, uno per progetto, con revisioni e blocchi di salvataggio per progetto
 server/network.js       Filtro LAN (solo indirizzi privati), codice d'accesso facoltativo, indirizzi di rete
@@ -320,7 +345,8 @@ I test coprono:
 - l'API REST, compresi i conflitti di revisione e i salvataggi concorrenti;
 - i temi: i temi Terminale e Scuro definiscono ogni colore, così niente ricade sui valori del tema chiaro;
 - il filtro LAN e il codice d'accesso;
-- il ciclo di tool use dell'AI, compresi il rapporto di revisione e le istruzioni sulla lingua italiana. Il ciclo gira offline contro una finta Messages API locale in streaming.
+- il ciclo di tool use dell'AI, compresi il rapporto di revisione e le istruzioni sulla lingua italiana. Il ciclo gira offline contro una finta Messages API locale in streaming;
+- gli altri servizi AI, contro un finto server Chat Completions. I test coprono testo e chiamate di strumenti in streaming divisi in più pezzi, il turno successivo, lo strumento imposto della revisione, un modello senza strumenti, un server che risponde in JSON semplice, chiavi bearer ed elenco dei modelli, errori leggibili, e la regola degli indirizzi personalizzati.
 
 Per aggiungere un'altra lingua servono un dizionario (`public/js/locales/`), una base di conoscenza (`public/js/kb/`), un pacchetto di analisi (`public/js/lang/`) e una voce in `LANGS` (`public/js/i18n.js`).
 

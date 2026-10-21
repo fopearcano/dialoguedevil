@@ -1,5 +1,5 @@
 import { html, useState, useEffect, useRef, cx, charColor, miniMarkdown } from '../lib.js';
-import { state, mutate, act, navigate, aiAvailable, setSetting, activeScene } from '../store.js';
+import { state, mutate, act, navigate, aiAvailable, aiRequest, setSetting, activeScene } from '../store.js';
 import { Tabs, Cite, CharSelect, TextArea, Icon, Meter, CharDot, rich } from '../components/ui.js';
 import { INTERVIEW, CHARACTER_SECTIONS, VOICE_DIMENSIONS, VOICE_EXERCISES, MODALITIES, cite } from '../mckee.js';
 import { getPath, setPath, uid, characterById, newBeat, newLine, locateLine } from '../model.js';
@@ -220,10 +220,11 @@ function AiPanel({ mode }) {
     const controller = new AbortController();
     abortRef.current = controller;
     try {
+      const { apiKey, ...service } = aiRequest();
       await streamChat({
-        apiKey: state.settings.apiKey || undefined,
+        apiKey,
         signal: controller.signal,
-        body: { mode: mode === 'lab' ? 'alternatives' : mode, model: state.settings.model || undefined, lang: getLang(), dialogueLang: p.lang, messages: toApiMessages(history, p), context: buildContext(extraMeta) },
+        body: { mode: mode === 'lab' ? 'alternatives' : mode, ...service, lang: getLang(), dialogueLang: p.lang, messages: toApiMessages(history, p), context: buildContext(extraMeta) },
         onEvent: (type, data) => {
           if (type === 'text') acc.text += data.delta;
           else if (type === 'proposal') acc.proposals.push({ ...data, status: {}, speaker: c?.id, partner: partner?.id });

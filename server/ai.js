@@ -3,9 +3,9 @@
 // "executes" a tool by validating its input and forwarding it to the browser.
 
 import Anthropic from '@anthropic-ai/sdk';
-import { z } from 'zod';
 import { TOOLS, TOOL_ACK, MODES, buildSystem } from './prompts.js';
-import { REVIEWABLE_FLAWS } from '../public/js/mckee.js';
+import { checkTool, TERMINAL_TOOLS } from './tools.js';
+import { PROVIDERS, DEFAULT_PROVIDER, providersStatus, runCompatChat } from './providers.js';
 import { trl, normLang, N_ } from '../public/js/i18n.js';
 
 export const MODELS = [
@@ -19,50 +19,34 @@ export const DEFAULT_MODEL = process.env.DD_MODEL || 'claude-opus-5-5';
 const FALLBACK_MODELS = new Set(['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-fable-5-1']);
 const MAX_ITERATIONS = 6;
 
-const opt = z.string().optional().nullable();
-const SCHEMAS = {
-  propose_character_updates: z.object({
-    character_id: z.string(),
-    updates: z.array(z.object({ path: z.string().min(1), value: z.union([z.string(), z.number()]).transform(String), rationale: z.string().default('') })).min(1),
-  }),
-  propose_beats: z.object({
-    scene_id: z.string(),
-    rationale: opt,
-    beats: z.array(z.object({
-      actor_id: z.string(), action: z.string(), reactor_id: z.string(), reaction: z.string(),
-      charge: z.number().min(-10).max(10).optional().nullable(),
-      intensity: z.number().min(0).max(10).optional().nullable(),
-      lines: z.array(z.object({ speaker_id: z.string(), text: z.string(), paren: opt, subtext: opt, tactic: opt })),
-    })).min(1),
-  }),
-  propose_lines: z.object({
-    scene_id: z.string(),
-    target_line_id: opt,
-    options: z.array(z.object({ speaker_id: z.string(), text: z.string(), paren: opt, subtext: z.string(), tactic: z.string(), note: opt })).min(1),
-  }),
-  speak_in_character: z.object({ text: z.string().min(1), paralanguage: opt, subtext: z.string(), tactic: z.string() }),
-  report_issues: z.object({
-    summary: z.string().default(''),
-    issues: z.array(z.object({
-      line_id: z.string().default(''), flaw: z.enum(REVIEWABLE_FLAWS), severity: z.enum(['info', 'warning', 'serious']).default('warning'),
-      evidence: z.string().default(''), note: z.string(), fix: z.string().default(''),
-    })).default([]),
-    disputes: z.array(z.object({ line_id: z.string().default(''), flaw: z.enum(REVIEWABLE_FLAWS), reason: z.string() })).default([]),
-  }),
-};
-
-// Tools whose call is the whole answer: no follow-up turn is needed.
-const TERMINAL_TOOLS = new Set(['speak_in_character', 'report_issues']);
-
+// serverKey/defaultModel/models describe Anthropic; `providers` the others.
 export function aiStatus() {
   return {
     serverKey: Boolean(process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN),
     mock: process.env.DD_AI_MOCK === '1',
     defaultModel: DEFAULT_MODEL,
     models: MODELS,
+    defaultProvider: DEFAULT_PROVIDER,
+    providers: providersStatus(),
     modes: Object.fromEntries(Object.entries(MODES).map(([k, v]) => [k, v.label])),
   };
 }
+
+// Checks the key against the Anthropic API (Settings → Test connection) and
+// returns the models this app offers, with those the key can reach.
+export async function listAnthropicModels(apiKey) {
+  if (process.env.DD_AI_MOCK === '1') return { models: MODELS.map((m) => m.id) };
+  const client = apiKey ? new Anthropic({ apiKey }) : new Anthropic();
+  const available = [];
+  for await (const m of client.models.list({ limit: 100 })) {
+    available.push(m.id);
+    if (available.length >= 100) break;
+  }
+  return { models: MODELS.map((m) => m.id), available };
+}
+
+// The tool each mode must answer with, for services where it can be forced.
+const FORCED_TOOL = { review: 'report_issues', rehearse: 'speak_in_character' };
 
 function sanitizeMessages(raw) {
   const msgs = (Array.isArray(raw) ? raw : [])
@@ -77,17 +61,26 @@ function sanitizeMessages(raw) {
 // Runs the conversation and reports progress through send(event, data).
 // body.lang: the interface language (replies); body.dialogueLang: the
 // language the project's dialogue is written in.
-export async function runChat({ body, apiKey, send, signal }) {
+// body.provider picks the service (default: DD_AI_PROVIDER or Anthropic);
+// `trusted` says whether this caller may point the server at a custom
+// address (see providers.js).
+export async function runChat({ body, apiKey, send, signal, trusted = false }) {
   const lang = normLang(body.lang);
   const dialogueLang = normLang(body.dialogueLang || lang);
   const L = (key, vars) => trl(lang, key, vars);
   const mode = MODES[body.mode] ? body.mode : 'coach';
-  const model = MODELS.some((m) => m.id === body.model) ? body.model : DEFAULT_MODEL;
+  const provider = PROVIDERS[body.provider] ? body.provider : DEFAULT_PROVIDER;
   const messages = sanitizeMessages(body.messages);
   const context = { meta: body.context?.meta || {}, data: body.context?.data || {} };
 
   if (process.env.DD_AI_MOCK === '1') return mockChat({ mode, context, send, signal, lang, dialogueLang });
 
+  if (PROVIDERS[provider].kind === 'compat') {
+    const system = buildSystem(mode, context, { lang, dialogueLang, contextChars: PROVIDERS[provider].contextChars }).map((b) => b.text).join('\n\n');
+    return runCompatChat({ provider, apiKey, baseUrl: body.baseUrl, model: body.model, system, messages, forceTool: FORCED_TOOL[mode], trusted, send, signal, L });
+  }
+
+  const model = MODELS.some((m) => m.id === body.model) ? body.model : DEFAULT_MODEL;
   const client = apiKey ? new Anthropic({ apiKey }) : new Anthropic();
   const system = buildSystem(mode, context, { lang, dialogueLang });
   const tools = TOOLS.map((t) => ({ ...t, eager_input_streaming: true }));
@@ -145,10 +138,9 @@ export async function runChat({ body, apiKey, send, signal }) {
     const results = [];
     let terminal = true;
     for (const tu of toolUses) {
-      const schema = SCHEMAS[tu.name];
-      const parsed = schema ? schema.safeParse(tu.input) : { success: false, error: new Error(`Unknown tool ${tu.name}`) };
-      if (!parsed.success) {
-        results.push({ type: 'tool_result', tool_use_id: tu.id, is_error: true, content: JSON.stringify({ INVALID_INPUT: String(parsed.error?.message || parsed.error).slice(0, 2000) }) });
+      const parsed = checkTool(tu.name, tu.input);
+      if (!parsed.ok) {
+        results.push({ type: 'tool_result', tool_use_id: tu.id, is_error: true, content: JSON.stringify({ INVALID_INPUT: parsed.error }) });
         terminal = false;
         continue;
       }
@@ -164,6 +156,7 @@ export async function runChat({ body, apiKey, send, signal }) {
 
 export function describeError(err, lang = 'en') {
   const L = (key, vars) => trl(lang, key, vars);
+  if (err?.providerError) return { status: err.status, message: L(err.message, err.vars) };
   if (err instanceof Anthropic.AuthenticationError) return { status: 401, message: L('The API key was rejected. Check it in Settings, or set ANTHROPIC_API_KEY for the server.') };
   if (err instanceof Anthropic.PermissionDeniedError) return { status: 403, message: L('This API key does not have access to the selected model.') };
   if (err instanceof Anthropic.NotFoundError) return { status: 404, message: L('Model not found. Pick another model in Settings.') };

@@ -25,12 +25,17 @@ export const projectMeta = (id) => fetch(`/api/projects/${encodeURIComponent(id)
 export const networkInfo = () => fetch('/api/network', { headers: H() }).then(json);
 export const deleteProject = (id) => fetch(`/api/projects/${encodeURIComponent(id)}`, { method: 'DELETE', headers: H() }).then(json);
 export const aiStatus = () => fetch('/api/ai/status', { headers: H() }).then(json);
+export function listModels({ provider, apiKey, baseUrl }) {
+  const headers = JSON_H();
+  if (apiKey) headers['x-ai-key'] = apiKey;
+  return fetch('/api/ai/models', { method: 'POST', headers, body: JSON.stringify({ provider, baseUrl }) }).then(json);
+}
 
 // Streams a chat turn. onEvent(type, data) receives: text, proposal, notice,
 // refusal, error, done.
 export async function streamChat({ body, apiKey, onEvent, signal }) {
   const headers = JSON_H();
-  if (apiKey) headers['x-anthropic-key'] = apiKey;
+  if (apiKey) headers['x-ai-key'] = apiKey;
   const res = await fetch('/api/ai/chat', { method: 'POST', headers, body: JSON.stringify(body), signal });
   if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
   const reader = res.body.getReader();

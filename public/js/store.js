@@ -11,7 +11,7 @@ const SETTINGS_KEY = 'dd:settings';
 const listeners = new Set();
 
 function loadSettings() {
-  const defaults = { lang: guessLang(navigator.languages || [navigator.language]), theme: 'system', apiKey: '', model: '', showSubtext: true, showPossible: true, showDismissed: false, readDirections: false, quietChecks: false, lensOpen: window.innerWidth >= 1100, focusMode: false, smartPunctuation: true, lastScene: {}, lastProjectId: '', drawerOpen: window.innerWidth >= 1500 };
+  const defaults = { lang: guessLang(navigator.languages || [navigator.language]), theme: 'system', apiKey: '', model: '', aiProvider: '', apiKeys: {}, models: {}, localUrl: '', showSubtext: true, showPossible: true, showDismissed: false, readDirections: false, quietChecks: false, lensOpen: window.innerWidth >= 1100, focusMode: false, smartPunctuation: true, lastScene: {}, lastProjectId: '', drawerOpen: window.innerWidth >= 1500 };
   try {
     return { ...defaults, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}') };
   } catch {
@@ -387,9 +387,43 @@ export async function boot() {
   document.addEventListener('visibilitychange', () => { if (!document.hidden) poll(); });
 }
 
-export function aiAvailable() {
-  return Boolean(state.ai?.mock || state.ai?.serverKey || state.settings.apiKey);
+// The AI service this browser uses, with its key, model and address. Keys
+// stay in this browser (apiKey for Anthropic, apiKeys for the others) and
+// go to this app's own server with each request.
+export function aiConfig() {
+  const s = state.settings;
+  const ai = state.ai || {};
+  const provider = s.aiProvider || ai.defaultProvider || 'anthropic';
+  if (provider === 'anthropic') {
+    return { provider, label: 'Anthropic (Claude)', apiKey: s.apiKey || '', model: s.model || '', baseUrl: '', serverKey: !!ai.serverKey, defaultModel: ai.defaultModel || '', keyRequired: true };
+  }
+  const p = ai.providers?.[provider] || {};
+  return {
+    provider,
+    label: p.label || provider,
+    apiKey: s.apiKeys?.[provider] || '',
+    model: s.models?.[provider] || '',
+    baseUrl: p.customUrl ? s.localUrl || '' : '',
+    serverUrl: p.baseUrl || '',
+    serverKey: !!p.serverKey,
+    defaultModel: p.defaultModel || '',
+    keyRequired: p.keyRequired !== false,
+  };
 }
+
+export function aiAvailable() {
+  if (state.ai?.mock) return true;
+  const c = aiConfig();
+  const hasKey = !c.keyRequired || c.serverKey || Boolean(c.apiKey);
+  const hasModel = c.provider === 'anthropic' || Boolean(c.model || c.defaultModel);
+  return hasKey && hasModel;
+}
+
+// Request fields for the selected service.
+export const aiRequest = () => {
+  const c = aiConfig();
+  return { apiKey: c.apiKey || undefined, provider: c.provider, model: c.model || undefined, baseUrl: c.baseUrl || undefined };
+};
 
 export function toggleHelp(open = !state.help) {
   state.help = open;

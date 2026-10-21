@@ -290,11 +290,12 @@ export const TOOL_ACK = {
   report_issues: 'Report received.',
 };
 
-export function buildSystem(mode, context, { lang = 'en', dialogueLang = lang } = {}) {
+// contextChars caps the project data (smaller for local models).
+export function buildSystem(mode, context, { lang = 'en', dialogueLang = lang, contextChars = 120000 } = {}) {
   const m = MODES[mode] || MODES.coach;
   return [
     { type: 'text', text: frameworkText(lang), cache_control: { type: 'ephemeral' } },
     { type: 'text', text: `${m.instructions(context.meta || {})}\n\n${languageNote(lang, dialogueLang)}` },
-    { type: 'text', text: `# Project context (writer data, JSON)\n${JSON.stringify(context.data ?? {}, null, 1).slice(0, 120000)}` },
+    { type: 'text', text: `# Project context (writer data, JSON)\n${JSON.stringify(context.data ?? {}, null, 1).slice(0, contextChars)}` },
   ];
 }

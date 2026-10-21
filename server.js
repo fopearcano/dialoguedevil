@@ -5,7 +5,8 @@ import express from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createStorage } from './server/storage.js';
-import { aiStatus, runChat, describeError } from './server/ai.js';
+import { aiStatus, runChat, describeError, listAnthropicModels } from './server/ai.js';
+import { listModels } from './server/providers.js';
 import { lanGuard, accessGate, lanAddresses, isLoopback } from './server/network.js';
 import { newProject, uid } from './public/js/model.js';
 import { sampleProject } from './public/js/sample.js';
@@ -94,17 +95,36 @@ export function createApp({ accessCode = process.env.DD_ACCESS_CODE || '', allow
 
   app.get('/api/ai/status', (_req, res) => res.json(aiStatus()));
 
+  // The key for the selected service comes per request, from this browser.
+  const aiKey = (req) => String(req.get('x-ai-key') || req.get('x-anthropic-key') || '').trim() || undefined;
+  // Who may point the server at a custom AI address: this computer, or any
+  // device that passed the access code.
+  const trusted = (req) => isLoopback(req.socket.remoteAddress) || Boolean(accessCode);
+
+  // Models a service offers (Settings → AI). Also a connection test.
+  app.post('/api/ai/models', async (req, res) => {
+    const lang = reqLang(req);
+    const provider = String(req.body?.provider || '');
+    try {
+      res.json(provider === 'anthropic' ? await listAnthropicModels(aiKey(req))
+        : await listModels({ provider, apiKey: aiKey(req), baseUrl: req.body?.baseUrl, trusted: trusted(req) }));
+    } catch (err) {
+      const e = describeError(err, lang);
+      res.status(e.status || 500).json({ error: e.message });
+    }
+  });
+
   // Server-sent events over a POST response.
   app.post('/api/ai/chat', async (req, res) => {
     res.writeHead(200, { 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-cache, no-transform', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
     const send = (event, data) => { if (!res.writableEnded) res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`); };
     const controller = new AbortController();
     res.on('close', () => controller.abort());
-    const apiKey = String(req.get('x-anthropic-key') || '').trim() || undefined;
+    const apiKey = aiKey(req);
     const body = req.body || {};
     const lang = normLang(body.lang || reqLang(req));
     try {
-      await runChat({ body: { ...body, lang }, apiKey, send, signal: controller.signal });
+      await runChat({ body: { ...body, lang }, apiKey, send, signal: controller.signal, trusted: trusted(req) });
       send('done', {});
     } catch (err) {
       if (!controller.signal.aborted) send('error', describeError(err, lang));
@@ -130,7 +150,11 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     if (open) console.log(`  ${process.env.DD_ALLOW_PUBLIC === '1' ? trl(L, 'Public addresses: allowed (DD_ALLOW_PUBLIC=1).') : trl(L, 'Only devices on your local network may connect.')}`);
     if (open) console.log(`  ${process.env.DD_ACCESS_CODE ? trl(L, 'Access code: required on other devices (DD_ACCESS_CODE).') : trl(L, 'Access code: off. Set DD_ACCESS_CODE=… to require one on other devices.')}`);
     console.log(ai.mock ? trl(L, 'AI: mock mode (DD_AI_MOCK=1)') : ai.serverKey ? trl(L, 'AI: server key found, default model {model}', { model: ai.defaultModel }) : trl(L, 'AI: off until a key is added in Settings or ANTHROPIC_API_KEY is set'));
-    if (open && ai.serverKey && !process.env.DD_ACCESS_CODE) console.log(`  ${trl(L, 'Note: devices on your network can use the server\'s API key. Set DD_ACCESS_CODE to restrict access.')}`);
+    const others = Object.values(ai.providers).filter((x) => x.serverKey).map((x) => x.label);
+    if (!ai.mock && others.length) console.log(`  ${trl(L, 'Server keys also found for: {services}', { services: others.join(', ') })}`);
+    if (!ai.mock && process.env.DD_LOCAL_AI_URL) console.log(`  ${trl(L, 'Local AI server: {url}', { url: ai.providers.local.baseUrl })}`);
+    if (!ai.mock && process.env.DD_AI_PROVIDER) console.log(`  ${trl(L, 'Default AI service: {service}', { service: ai.defaultProvider })}`);
+    if (open && (ai.serverKey || others.length) && !process.env.DD_ACCESS_CODE) console.log(`  ${trl(L, 'Note: devices on your network can use the server\'s API key. Set DD_ACCESS_CODE to restrict access.')}`);
     console.log(`  ${trl(L, 'Language: {lang} (set DD_LANG=en or DD_LANG=it to change the console and the first sample).', { lang: L })}`);
   });
 }

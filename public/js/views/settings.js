@@ -1,9 +1,9 @@
 import { html, useState, useEffect, cx, download, slug } from '../lib.js';
-import { state, setSetting, mutate, act, createAndOpen, removeProject, toast, aiAvailable, toggleHelp } from '../store.js';
+import { state, setSetting, mutate, act, createAndOpen, removeProject, toast, aiAvailable, aiConfig, toggleHelp } from '../store.js';
 import { Card, Field, Select, Icon, rich } from '../components/ui.js';
 import { normalizeProject } from '../model.js';
-import { networkInfo } from '../api.js';
-import { tr, LANGS } from '../i18n.js';
+import { networkInfo, listModels } from '../api.js';
+import { tr, trn, LANGS } from '../i18n.js';
 
 const code = (s) => html`<code>${s}</code>`;
 const kbd = (s) => html`<kbd>${s}</kbd>`;
@@ -42,8 +42,94 @@ function DevicesCard() {
           <li>${net.allowPublic ? rich('{strong} (DD_ALLOW_PUBLIC=1): anyone who can reach this port can connect.', { strong: html`<strong>${tr('Public addresses allowed')}</strong>` }) : tr('Only devices on your local network can connect: private addresses (home/office LAN, VPNs like Tailscale) and this computer\'s own subnet.')}</li>
           <li>${net.accessCode ? tr('Other devices must enter the access code once (DD_ACCESS_CODE); this computer never needs it.') : rich(state.ai?.serverKey ? 'No access code: anyone on your network can open it and use the server\'s API key. Start the server with {cmd} to require one.' : 'No access code: anyone on your network can open it. Start the server with {cmd} to require one.', { cmd: code('DD_ACCESS_CODE=…') })}</li>
           <li>${tr('If another device cannot connect, allow port {port} for Node.js in this computer\'s firewall.', { port: net.port })}</li>
-          <li>${rich('Your API key in this browser stays here; enter it on each device that should use AI (or set {env} on the server).', { env: code('ANTHROPIC_API_KEY') })}</li>
+          <li>${rich('Your API key in this browser stays here; enter it on each device that should use AI (or set {env} on the server).', { env: code((SERVICES().find((v) => v.id === aiConfig().provider) || SERVICES()[0]).env) })}</li>
         </ul>`}
+  </${Card}>`;
+}
+
+const SERVICES = () => [
+  { id: 'anthropic', name: 'Anthropic (Claude)', key: 'sk-ant-…', env: 'ANTHROPIC_API_KEY', hint: tr('Claude models through the Anthropic API. The default, and the one the prompts are tuned for.') },
+  { id: 'openai', name: 'OpenAI', key: 'sk-…', env: 'OPENAI_API_KEY', hint: tr('GPT models through the OpenAI API.') },
+  { id: 'openrouter', name: 'OpenRouter', key: 'sk-or-…', env: 'OPENROUTER_API_KEY', hint: tr('Hundreds of models from many providers behind one key. Model names look like “provider/model”.') },
+  { id: 'local', name: tr('Local / compatible'), key: tr('optional'), env: 'DD_LOCAL_AI_KEY', hint: tr('A model on your own computer or network: Ollama, LM Studio, llama.cpp, vLLM, or any server with an OpenAI-compatible API.') },
+];
+// Default addresses of common local servers.
+const LOCAL_PRESETS = [['Ollama', 'http://localhost:11434/v1'], ['LM Studio', 'http://localhost:1234/v1'], ['llama.cpp', 'http://localhost:8080/v1'], ['vLLM', 'http://localhost:8000/v1']];
+const isLocalUrl = (u) => { try { return /^(localhost|127\.|\[::1\]|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(new URL(u).host); } catch { return false; } };
+
+function AiCard() {
+  const s = state.settings;
+  const ai = state.ai || {};
+  const c = aiConfig();
+  const services = SERVICES();
+  const svc = services.find((x) => x.id === c.provider) || services[0];
+  const [showKey, setShowKey] = useState(false);
+  const [models, setModels] = useState({});
+  const [test, setTest] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const setKey = (v) => (c.provider === 'anthropic' ? setSetting('apiKey', v) : setSetting('apiKeys', { ...s.apiKeys, [c.provider]: v }));
+  const setModel = (v) => (c.provider === 'anthropic' ? setSetting('model', v) : setSetting('models', { ...s.models, [c.provider]: v }));
+  const choose = (id) => { setSetting('aiProvider', id); setTest(null); setShowKey(false); };
+  // Lists the service's models: a connection test that costs nothing.
+  const load = async () => {
+    setBusy(true);
+    setTest(null);
+    try {
+      const r = await listModels({ provider: c.provider, apiKey: c.apiKey || undefined, baseUrl: c.baseUrl || undefined });
+      const list = r.available || r.models;
+      setModels({ ...models, [c.provider]: r.models });
+      const chosen = c.model || c.defaultModel || (c.provider === 'anthropic' ? ai.defaultModel : '');
+      let text = trn(list.length, 'Connected: {n} model available.', 'Connected: {n} models available.');
+      if (chosen && !list.includes(chosen)) text += ` ${tr('“{model}” is not among them.', { model: chosen })}`;
+      if (!chosen && c.provider !== 'anthropic') text += ` ${tr('Now pick one of them as the model.')}`;
+      setTest({ ok: true, text });
+    } catch (err) {
+      setTest({ ok: false, text: err.message });
+    }
+    setBusy(false);
+  };
+  const address = c.baseUrl || c.serverUrl;
+  const hasKey = !c.keyRequired || c.serverKey || c.apiKey;
+  const status = ai.mock ? tr('mock mode') : aiAvailable() ? (c.apiKey ? tr('using your key') : c.serverKey ? tr('server key configured') : tr('ready')) : hasKey ? tr('pick a model') : tr('off');
+  const list = models[c.provider] || [];
+  const privacy = c.provider === 'local'
+    ? (isLocalUrl(address) ? tr('Each AI request goes to the server at this address, on your own computer or network.') : tr('Each AI request goes to the server at this address, outside your network.'))
+    : tr('Each AI request sends the scene, the profiles involved and the McKee framework to {service}.', { service: svc.name });
+  return html`<${Card} title=${tr('AI collaborator (optional)')} sub=${tr('Powers the coach, in-character rehearsal, scene doctor, beat partner, line lab and AI double-check. Everything else works offline.')}>
+    <p class="small">${tr('Status:')} <span class=${cx('ai-pill', aiAvailable() ? 'on' : 'off')}>${svc.name} · ${status}</span></p>
+    <${Field} label=${tr('Service')} hint=${svc.hint}>
+      <div class="segmented ai-services">${services.map((x) => html`<button type="button" class=${cx(c.provider === x.id && 'active')} aria-pressed=${c.provider === x.id} onClick=${() => choose(x.id)}>${x.name}</button>`)}</div>
+    </${Field}>
+    ${c.provider === 'local' ? html`<${Field} label=${tr('Server address')} hint=${tr('The address of the server\'s OpenAI-compatible API, usually ending in /v1. Seen from the computer running Dialogue Devil: “localhost” is that computer.')}>
+      <input class="input" type="url" value=${s.localUrl} placeholder=${c.serverUrl} aria-label=${tr('Server address')} onInput=${(e) => setSetting('localUrl', e.currentTarget.value.trim())} />
+      <div class="chip-row presets">${LOCAL_PRESETS.map(([name, url]) => html`<button type="button" class=${cx('chip-btn', address === url && 'active')} onClick=${() => { setSetting('localUrl', url); setTest(null); }}>${name}</button>`)}</div>
+    </${Field}>` : ''}
+    <div class="two-col tight">
+      <${Field} label=${c.provider === 'local' ? tr('API key (optional)') : tr('{service} API key', { service: svc.name })}
+        hint=${rich('Stored only in this browser and sent to your own Dialogue Devil server with each AI request; the server never writes it to disk. Leave empty if the server has {env} set.', { env: html`<code>${svc.env}</code>` })}>
+        <div class="key-row">
+          <input class="input" type=${showKey ? 'text' : 'password'} value=${c.apiKey} placeholder=${c.serverKey ? tr('Server key in use') : svc.key} autocomplete="off" aria-label=${tr('API key')} onInput=${(e) => setKey(e.currentTarget.value.trim())} />
+          <button type="button" class="btn btn-quiet" onClick=${() => setShowKey(!showKey)}>${showKey ? tr('Hide') : tr('Show')}</button>
+        </div>
+      </${Field}>
+      <${Field} label=${tr('Model')} hint=${c.provider === 'anthropic' ? '' : tr('Type a model name, or load the list from the service and pick one.')}>
+        ${c.provider === 'anthropic'
+          ? html`<${Select} value=${s.model} onChange=${setModel} options=${(ai.models || []).map((m) => [m.id, m.id === ai.defaultModel ? tr('{model} (default)', { model: m.label }) : m.label])} placeholder=${tr('Server default ({model})', { model: ai.defaultModel || 'claude-opus-5-5' })} />`
+          : html`<div class="key-row">
+            <input class="input" list=${`dd-models-${c.provider}`} value=${c.model} placeholder=${c.defaultModel ? tr('Server default ({model})', { model: c.defaultModel }) : tr('Model name')} aria-label=${tr('Model')} onInput=${(e) => setModel(e.currentTarget.value.trim())} />
+            <button type="button" class="btn btn-quiet" disabled=${busy} onClick=${load}>${tr('Load models')}</button>
+          </div>
+          <datalist id=${`dd-models-${c.provider}`}>${list.map((m) => html`<option value=${m} />`)}</datalist>
+          ${list.length ? html`<${Select} value=${list.includes(c.model) ? c.model : ''} onChange=${setModel} options=${list.map((m) => [m, m])} placeholder=${trn(list.length, '{n} model loaded: choose…', '{n} models loaded: choose…')} ariaLabel=${tr('Loaded models')} />` : ''}`}
+      </${Field}>
+    </div>
+    <div class="ai-test">
+      <button type="button" class="btn btn-small" disabled=${busy || !hasKey} onClick=${load}><${Icon} name="check2" /> ${busy ? tr('Testing…') : tr('Test connection')}</button>
+      ${test ? html`<span class=${cx('small', test.ok ? 'ok-text' : 'error-text')} role="status">${test.text}</span>` : ''}
+    </div>
+    <p class="small muted">${privacy}</p>
+    ${c.provider === 'local' ? html`<p class="small muted">${tr('Proposals (coach, beats, line lab, AI double-check) need a model with tool calling; others can still talk. Raise the model\'s context length to at least 16k tokens: the McKee framework alone is about 6k.')}</p>` : ''}
+    ${c.provider !== 'anthropic' ? html`<p class="small muted">${tr('The prompts were written and tested with Claude; other models may follow the method less closely.')}</p>` : ''}
   </${Card}>`;
 }
 
@@ -62,9 +148,7 @@ function LanguageCard() {
 
 export function SettingsView() {
   const s = state.settings;
-  const ai = state.ai || {};
   const p = state.project;
-  const [showKey, setShowKey] = useState(false);
   const importFile = async (file) => {
     try {
       const data = JSON.parse(await file.text());
@@ -90,20 +174,7 @@ export function SettingsView() {
       </${Card}>
     </div>
 
-    <${Card} title=${tr('AI collaborator (optional)')} sub=${tr('Powers the coach, in-character rehearsal, scene doctor, beat partner, line lab and AI double-check. Everything else works offline.')}>
-      <p class="small">${tr('Status:')} <span class=${cx('ai-pill', aiAvailable() ? 'on' : 'off')}>${ai.mock ? tr('mock mode') : ai.serverKey ? tr('server key configured') : s.apiKey ? tr('using your key') : tr('off')}</span></p>
-      <div class="two-col tight">
-        <${Field} label=${tr('Anthropic API key')} hint=${tr('Stored only in this browser\'s local storage and sent to your own Dialogue Devil server with each AI request. The server never writes it to disk. Leave empty if the server has ANTHROPIC_API_KEY set.')}>
-          <div class="key-row">
-            <input class="input" type=${showKey ? 'text' : 'password'} value=${s.apiKey} placeholder=${ai.serverKey ? tr('Server key in use') : 'sk-ant-…'} autocomplete="off" onInput=${(e) => setSetting('apiKey', e.currentTarget.value.trim())} />
-            <button type="button" class="btn btn-quiet" onClick=${() => setShowKey(!showKey)}>${showKey ? tr('Hide') : tr('Show')}</button>
-          </div>
-        </${Field}>
-        <${Field} label=${tr('Model')}>
-          <${Select} value=${s.model} onChange=${(v) => setSetting('model', v)} options=${(ai.models || []).map((m) => [m.id, m.id === ai.defaultModel ? tr('{model} (default)', { model: m.label }) : m.label])} placeholder=${tr('Server default ({model})', { model: ai.defaultModel || 'claude-opus-5-5' })} />
-        </${Field}>
-      </div>
-    </${Card}>
+    <${AiCard} />
 
     <${DevicesCard} />
 

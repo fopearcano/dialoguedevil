@@ -1059,3 +1059,10 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border-radius
   .sc-columns { grid-template-columns: minmax(0, 1fr); }
   .sc-row { grid-template-columns: 130px minmax(0, 1fr); }
 }
+
+/* ---------------------------------------------------------------- AI services */
+.ai-services button { white-space: nowrap; }
+.chip-row.presets { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.chip-btn.active { border-color: var(--ink); }
+.ai-test { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 4px 0 8px; }
+.key-row .select { margin-top: 0; }
