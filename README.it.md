@@ -223,6 +223,13 @@ L'AI non modifica mai direttamente il tuo lavoro. Chiama strumenti di proposta, 
 
 ![Impronta vocale, tema scuro](docs/screenshots/character-voice-it.png)
 
+### Temi
+In **Impostazioni → Aspetto → Tema**, *Sistema* segue il dispositivo (chiaro o scuro), oppure puoi scegliere *Chiaro*, *Scuro* o *Terminale*.
+
+**Terminale** è un tema minimale in stile fosfori verdi: un solo carattere monospaziato, verde su nero, angoli vivi, niente ombre, pulsanti e selezione in negativo. Gli otto colori dei personaggi e le palette dei grafici sono stati verificati sullo sfondo del terminale per luminosità, distinguibilità con i deficit della visione dei colori e contrasto, così personaggi e grafici restano facili da distinguere. Tutto il testo supera il contrasto 4,5:1.
+
+![Tema Terminale](docs/screenshots/terminal-it.png)
+
 ## Configurare l'AI (facoltativo)
 
 Avvia il server con `ANTHROPIC_API_KEY` impostata, oppure incolla una chiave nelle **Impostazioni**. Una chiave inserita nelle Impostazioni resta nella memoria locale di quel browser e viene inviata al tuo server Dialogue Devil a ogni richiesta AI; il server la usa solo per quella richiesta e non la scrive mai su disco.
@@ -279,6 +286,7 @@ I test coprono:
 - il doppio controllo: richiamo sulle serie di taratura e di verifica, nessun falso allarme sulle battute pulite, stati, contestazioni, rilievi ignorati e rilievi AI superati;
 - la versione italiana: ogni testo mostrato dall'app tradotto con i suoi segnaposto (il test cerca nel codice ogni stringa visibile e fallisce se manca la traduzione), le due basi di conoscenza identiche voce per voce, le regole italiane (elisioni, passivo, burocratese, gerundi, radici), il richiamo e i falsi allarmi in italiano, l'esempio e le esportazioni italiane;
 - l'API REST, compresi i conflitti di revisione e i salvataggi concorrenti;
+- i temi: i temi Terminale e Scuro definiscono ogni colore, così niente ricade sui valori del tema chiaro;
 - il filtro LAN e il codice d'accesso;
 - il ciclo di tool use dell'AI, compresi il rapporto di revisione e le istruzioni sulla lingua italiana. Il ciclo gira offline contro una finta Messages API locale in streaming.
 

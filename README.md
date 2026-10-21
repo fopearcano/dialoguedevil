@@ -237,6 +237,13 @@ The AI never edits your work directly. It calls proposal tools, and you choose w
 
 ![Voice fingerprint, dark theme](docs/screenshots/character-voice.png)
 
+### Themes
+In **Settings → Appearance → Theme**, *System* follows the device (light or dark), or you can pick *Light*, *Dark* or *Terminal*.
+
+**Terminal** is a minimal theme in green-phosphor style: one monospace typeface, green on black, square corners, no shadows, and inverse-video buttons and selection. Its eight character colors and chart palettes were checked against the terminal background for lightness, colorblind separation and contrast, so speakers and charts stay easy to tell apart. All text clears 4.5:1 contrast.
+
+![Terminal theme](docs/screenshots/terminal.png)
+
 ## AI setup (optional)
 
 Either start the server with `ANTHROPIC_API_KEY` set, or paste a key into **Settings**. A key entered in Settings stays in that browser's local storage and is sent to your own Dialogue Devil server with each AI request, which uses it for that request only and never writes it to disk.
@@ -293,6 +300,7 @@ The suites cover:
 - the double-check: recall on the tuning and held-out sets, no false alarms on clean lines, statuses, disputes, dismissals and stale AI findings;
 - the Italian version: every displayed string translated with its placeholders, the knowledge bases matching entry for entry, the Italian rules (elisions, passive, *burocratese*, gerunds, stemming), Italian recall and false alarms, the Italian sample and exports;
 - the REST API, including revision conflicts and concurrent saves;
+- the themes: the terminal and dark themes define every color token, so nothing falls back to light values;
 - the LAN guard and access code;
 - the AI tool-use loop, including the review report and the Italian framework and language instructions. The loop runs offline against a local fake of the Messages API streaming endpoint.
 

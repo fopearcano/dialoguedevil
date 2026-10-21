@@ -77,7 +77,7 @@ export function applyLang() {
 
 export function applyTheme() {
   const t = state.settings.theme;
-  if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+  if (t === 'light' || t === 'dark' || t === 'terminal') document.documentElement.dataset.theme = t;
   else delete document.documentElement.dataset.theme;
 }
 
@@ -409,5 +409,6 @@ function flushOnHide() {
 document.addEventListener('visibilitychange', () => { if (document.hidden) flushOnHide(); });
 window.addEventListener('pagehide', flushOnHide);
 
-// Before the first render, so nothing flashes in the wrong language.
+// Before the first render, so nothing flashes in the wrong language or theme.
 applyLang();
+applyTheme();

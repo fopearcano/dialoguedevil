@@ -71,6 +71,34 @@
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 6px 20px rgba(0, 0, 0, 0.25);
 }
 
+/* Terminal: a second, minimal theme in the style of a green-phosphor
+   terminal. Its categorical palette was validated against the terminal
+   surface (#0c100c): lightness band, chroma, adjacent CVD ΔE ≥ 14, contrast;
+   the diverging pair is cyan/red with a neutral midpoint, the sequential
+   ramp one green hue. Text tokens clear 4.5:1. */
+:root[data-theme="terminal"] {
+  color-scheme: dark;
+  --page: #070a07; --surface: #0c100c; --surface-2: #111811; --surface-3: #1a241a;
+  --border: rgba(120, 255, 150, 0.13); --border-strong: rgba(120, 255, 150, 0.28);
+  --ink: #b7f0c0; --ink-2: #86c890; --ink-3: #6aa673; --muted: #5a8a62; --grid: #172117; --axis: #2b3a2c;
+  --ink-on-light: #0b0b0b;
+  --accent: #39ff7a; --accent-soft: rgba(57, 255, 122, 0.09);
+  --series-1: #0aa0d2; --series-2: #cf7c00; --series-3: #04a19b; --series-4: #a69306;
+  --series-5: #d53daf; --series-6: #1fa836; --series-7: #8264e7; --series-8: #ea3c3f;
+  --pos: #2fa8e0; --neg: #f0565a; --mid: #263026; --mid-strong: #6b7a6b;
+  --wash-pos: rgba(47, 168, 224, 0.13); --wash-neg: rgba(240, 86, 90, 0.13);
+  --seq-100: #d1f2d7; --seq-150: #bbe4c2; --seq-200: #a5d5ae; --seq-250: #90c79a; --seq-300: #7ab987;
+  --seq-350: #63ab74; --seq-400: #4b9d60; --seq-450: #30904d; --seq-500: #00823a; --seq-550: #007132;
+  --seq-600: #016129; --seq-650: #015122; --seq-700: #01421a;
+  --good: #39d353; --warning: #f2c94c; --serious: #f2994a; --critical: #ff5c5c; --ok-text: #39d353;
+  --undertow: #0b181d; --undertow-line: #1f5f73; --undertow-ink: #5fd0f0;
+  --shadow: none;
+  --radius: 0;
+  --font-sans: ui-monospace, SFMono-Regular, "JetBrains Mono", "Cascadia Mono", Menlo, Consolas, "Liberation Mono", "DejaVu Sans Mono", monospace;
+  --font-script: var(--font-sans);
+  --font-quote: var(--font-sans);
+}
+
 /* ---------------------------------------------------------------- base */
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; }
@@ -933,3 +961,44 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border-radius
 @media (max-width: 520px) {
   .topbar .btn-label { display: none; }
 }
+
+/* ---------------------------------------------------------------- terminal theme
+   Minimal: one typeface, square corners, no shadows, inverse-video
+   selection and primary actions, a prompt before each heading. */
+:root[data-theme="terminal"] body { font-size: 13px; letter-spacing: 0; }
+:root[data-theme="terminal"] *, :root[data-theme="terminal"] *::before, :root[data-theme="terminal"] *::after { border-radius: 0 !important; }
+:root[data-theme="terminal"] * { scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; }
+:root[data-theme="terminal"] ::selection { background: var(--accent); color: #000; }
+:root[data-theme="terminal"] input, :root[data-theme="terminal"] textarea { caret-color: var(--accent); }
+:root[data-theme="terminal"] :focus-visible { outline: 1px dashed var(--accent); outline-offset: 2px; }
+:root[data-theme="terminal"] .input:focus { border-color: var(--accent); box-shadow: none; }
+:root[data-theme="terminal"] h1, :root[data-theme="terminal"] h2, :root[data-theme="terminal"] h3, :root[data-theme="terminal"] h4,
+:root[data-theme="terminal"] .title-input, :root[data-theme="terminal"] .brand-name { letter-spacing: 0; }
+:root[data-theme="terminal"] .card-head h3::before, :root[data-theme="terminal"] .lens-card h4::before { content: "> "; color: var(--accent); font-weight: 400; }
+:root[data-theme="terminal"] .brand-name::after { content: "_"; color: var(--accent); animation: dd-blink 1.1s steps(1) infinite; }
+@keyframes dd-blink { 50% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { :root[data-theme="terminal"] .brand-name::after { animation: none; } }
+:root[data-theme="terminal"] .logo .logo-horn, :root[data-theme="terminal"] .logo .logo-bubble { fill: var(--accent); }
+:root[data-theme="terminal"] .logo .logo-lines { stroke: #000; }
+:root[data-theme="terminal"] .btn-primary { background: var(--accent); border-color: var(--accent); color: #000; }
+:root[data-theme="terminal"] .btn-primary:hover { background: var(--ink); border-color: var(--ink); }
+:root[data-theme="terminal"] .btn-primary:disabled { background: transparent; color: var(--ink-3); border-color: var(--border-strong); opacity: 1; }
+:root[data-theme="terminal"] .link-btn, :root[data-theme="terminal"] a.link-btn { color: var(--accent); }
+:root[data-theme="terminal"] .nav-item.active { background: transparent; color: var(--accent); }
+:root[data-theme="terminal"] .nav-item.active .icon { stroke: var(--accent); }
+:root[data-theme="terminal"] .segmented button.active { background: var(--accent); color: #000; box-shadow: none; }
+:root[data-theme="terminal"] .char-chip.active { background: transparent; }
+:root[data-theme="terminal"] .meter-track { background: var(--surface-3); }
+:root[data-theme="terminal"] .meter-fill { background: var(--accent); }
+:root[data-theme="terminal"] .sphere-2 { fill: var(--seq-650); }
+:root[data-theme="terminal"] .gauge-track { stroke: var(--surface-3); }
+:root[data-theme="terminal"] .magic-if, :root[data-theme="terminal"] .sk-action-text, :root[data-theme="terminal"] .action-text { font-style: normal; }
+:root[data-theme="terminal"] .magic-if-tag { color: var(--accent); }
+:root[data-theme="terminal"] .sk-line:hover, :root[data-theme="terminal"] .sk-line:focus-within { background: var(--surface-2); }
+:root[data-theme="terminal"] .sk-text:focus, :root[data-theme="terminal"] .entry-text:focus { background: var(--page); }
+:root[data-theme="terminal"] .entry-who::before { content: "$ "; color: var(--accent); }
+:root[data-theme="terminal"] .desk-composer { box-shadow: none; }
+:root[data-theme="terminal"] .toast:not(.error) { background: var(--accent); color: #000; }
+:root[data-theme="terminal"] .scrim, :root[data-theme="terminal"] .drawer-scrim { background: rgba(0, 0, 0, 0.6); }
+:root[data-theme="terminal"] .input:focus-visible, :root[data-theme="terminal"] .sk-text:focus-visible, :root[data-theme="terminal"] .sk-paren:focus-visible { outline: none; }
+:root[data-theme="terminal"] input[type="checkbox"], :root[data-theme="terminal"] input[type="radio"] { accent-color: var(--accent); }

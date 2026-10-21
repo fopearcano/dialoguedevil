@@ -999,4 +999,7 @@ export default {
   "Imported {n} lines": "Importate {n} battute",
   "{n} line has no action named under it yet.": "{n} battuta non ha ancora un'azione sotto.",
   "{n} lines have no action named under them yet.": "{n} battute non hanno ancora un'azione sotto.",
+  // Terminal theme
+  "Terminal": "Terminale",
+  "A minimal theme: one monospace typeface, green on black, square corners, no shadows.": "Un tema minimale: un solo carattere monospaziato, verde su nero, angoli vivi, niente ombre.",
 };

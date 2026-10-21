@@ -80,7 +80,8 @@ export function SettingsView() {
       <${LanguageCard} />
       <${Card} title=${tr('Appearance')}>
         <${Field} label=${tr('Theme')}>
-          <div class="segmented">${[['system', tr('System')], ['light', tr('Light')], ['dark', tr('Dark')]].map(([id, label]) => html`<button type="button" class=${cx(s.theme === id && 'active')} onClick=${() => setSetting('theme', id)}>${label}</button>`)}</div>
+          <div class="segmented">${[['system', tr('System')], ['light', tr('Light')], ['dark', tr('Dark')], ['terminal', tr('Terminal')]].map(([id, label]) => html`<button type="button" class=${cx(s.theme === id && 'active')} onClick=${() => setSetting('theme', id)}>${label}</button>`)}</div>
+          ${s.theme === 'terminal' ? html`<span class="field-hint">${tr('A minimal theme: one monospace typeface, green on black, square corners, no shadows.')}</span>` : ''}
         </${Field}>
         <label class="toggle"><input type="checkbox" checked=${s.showSubtext} onChange=${(e) => setSetting('showSubtext', e.currentTarget.checked)} /> ${tr('Show subtext rows in the workshop')}</label>
       </${Card}>
